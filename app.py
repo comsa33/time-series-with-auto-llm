@@ -516,7 +516,7 @@ def main():
                 selected_models = st.sidebar.multiselect(
                     "모델 선택",
                     available_models,
-                    default=available_models[:2] if not st.session_state.selected_models else st.session_state.selected_models
+                    default=available_models[:] if not st.session_state.selected_models else st.session_state.selected_models
                 )
                 st.session_state.selected_models = selected_models
                 
