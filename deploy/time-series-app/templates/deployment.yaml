@@ -16,12 +16,6 @@ spec:
       labels:
         app: {{ .Chart.Name }}
     spec:
-      initContainers:
-      - name: increase-inotify-limits
-        image: busybox
-        command: ["sh", "-c", "echo 'fs.inotify.max_user_instances=512' > /etc/sysctl.d/99-inotify.conf && sysctl -p /etc/sysctl.d/99-inotify.conf"]
-        securityContext:
-          privileged: true
       nodeSelector:
         "kubernetes.io/os": linux
         "kubernetes.io/hostname": ruo-server1
