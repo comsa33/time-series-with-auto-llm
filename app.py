@@ -135,7 +135,7 @@ def render_header():
     st.markdown("서울시 IoT 데이터를 활용한 시계열 분석 앱")
     
     # 확장 가능한 앱 소개
-    with st.expander("📌 App Introduction and Usage"):
+    with st.expander("📌 앱 소개 및 사용 방법"):
         st.markdown("""
         ### 📌 앱 소개
         이 앱은 서울시 대기질 데이터를 활용하여 시계열 데이터를 분석하고 시각화하는 도구입니다.
@@ -352,18 +352,107 @@ def main():
     if st.session_state.df is not None and not st.session_state.df.empty:
         # 데이터 기본 정보 표시
         with st.expander("📋 데이터 미리보기", expanded=True):
-            st.write(st.session_state.df.head())
+            # 데이터 샘플 표시
+            st.dataframe(st.session_state.df.head(), use_container_width=True)
             
-            col1, col2 = st.columns(2)
+            # 구분선 추가
+            st.markdown("---")
             
-            with col1:
-                st.write(f"**데이터 크기:** {st.session_state.df.shape[0]} 행 × {st.session_state.df.shape[1]} 열")
-                st.write(f"**기간:** {st.session_state.df['MSRDT'].min()} ~ {st.session_state.df['MSRDT'].max()}")
+            # 정보 섹션 제목
+            st.markdown("### 📊 데이터 요약 정보")
             
-            with col2:
-                if 'MSRSTE_NM' in st.session_state.df.columns:
-                    st.write(f"**측정소 수:** {st.session_state.df['MSRSTE_NM'].nunique()}개")
-                    st.write(f"**측정소 목록:** {', '.join(sorted(st.session_state.df['MSRSTE_NM'].unique()))}")
+            # 데이터 요약 정보를 위한 메트릭 카드 (4개 컬럼으로 배치)
+            metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
+            
+            # 1. 데이터 행 수
+            metric_col1.metric(
+                label="📈 데이터 행 수",
+                value=f"{st.session_state.df.shape[0]:,}",
+                help="전체 데이터 레코드 수",
+                border=True
+            )
+            
+            # 2. 데이터 열 수
+            metric_col2.metric(
+                label="📊 데이터 열 수",
+                value=f"{st.session_state.df.shape[1]}",
+                help="데이터셋의 속성(특성) 수",
+                border=True
+            )
+            
+            # 3. 시작 날짜
+            start_date = st.session_state.df['MSRDT'].min()
+            metric_col3.metric(
+                label="📅 시작 날짜",
+                value=f"{start_date.strftime('%Y-%m-%d')}",
+                help="데이터의 시작 날짜",
+                border=True
+            )
+            
+            # 4. 종료 날짜
+            end_date = st.session_state.df['MSRDT'].max()
+            days_diff = (end_date - start_date).days
+            metric_col4.metric(
+                label="📅 종료 날짜",
+                value=f"{end_date.strftime('%Y-%m-%d')}",
+                delta=f"{days_diff}일",
+                help="데이터의 종료 날짜 (delta는 전체 기간)",
+                border=True
+            )
+            
+            # 측정소 정보 섹션 (있는 경우만)
+            if 'MSRSTE_NM' in st.session_state.df.columns:
+                # 구분선 추가
+                st.markdown("---")
+                st.markdown("### 📍 측정소 정보")
+                
+                # 측정소 정보를 위한 두 개의 컬럼 (2:1 비율)
+                station_col1, station_col2 = st.columns([2, 1])
+                
+                with station_col1:
+                    # expander 대신 컨테이너와 제목 사용
+                    st.markdown("#### 📋 측정소 목록")
+                    # 구분선으로 시각적 분리 효과
+                    st.markdown("<hr style='margin: 5px 0px 15px 0px'>", unsafe_allow_html=True)
+                    
+                    # 측정소 목록을 표 형태로 표시 (더 구조화된 형태)
+                    stations = sorted(st.session_state.df['MSRSTE_NM'].unique())
+                    
+                    # 측정소 목록을 3개 컬럼으로 정렬하여 표시 (더 읽기 쉽게)
+                    cols = st.columns(3)
+                    for i, station in enumerate(stations):
+                        cols[i % 3].markdown(f"• {station}")
+                
+                with station_col2:
+                    # 측정소 수를 메트릭으로 표시
+                    num_stations = st.session_state.df['MSRSTE_NM'].nunique()
+                    st.metric(
+                        label="🏢 측정소 수",
+                        value=f"{num_stations}개",
+                        help="분석 대상 측정소의 총 개수",
+                        border=True
+                    )
+                    
+                    # 측정 빈도를 메트릭으로 표시 (시간당, 일당 측정 횟수 등)
+                    # 시간당 측정 빈도 계산 (대략적인 값)
+                    hours_span = (end_date - start_date).total_seconds() / 3600
+                    records_per_hour = st.session_state.df.shape[0] / max(hours_span, 1)
+                    
+                    st.metric(
+                        label="📊 측정 빈도",
+                        value=f"{records_per_hour:.1f}회/시간",
+                        help="시간당 평균 측정 빈도",
+                        border=True
+                    )
+                    
+                    # 추가 정보: 측정소별 데이터 수 분포
+                    records_per_station = st.session_state.df.groupby('MSRSTE_NM').size().mean()
+                    st.metric(
+                        label="📊 측정소별 데이터",
+                        value=f"{records_per_station:.1f}개",
+                        help="측정소당 평균 데이터 수",
+                        border=True
+                    )
         
         # 분석 옵션 설정
         st.sidebar.subheader("🔍 시계열 분석 옵션")
@@ -458,29 +547,117 @@ def main():
         with tab3:
             # 정상성 검정
             st.subheader("🔍 정상성 검정", help="정상성 검정(Stationarity Test)이란 시계열 데이터가 시간이 지나도 통계적 특성이 일정한지(=정상인지) 확인하는 검정입니다. 즉, 평균, 분산, 자기공분산 등의 값이 시간에 따라 변하지 않는지를 확인하는 것입니다")
-            
+
             try:
                 # 정상성 검정 수행
                 st.session_state.stationarity_result = data_processor.check_stationarity(st.session_state.series)
                 
-                # 정상성 검정 결과 표시
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.write(f"**ADF 통계량:** {st.session_state.stationarity_result['test_statistic']:.4f}")
-                    st.write(f"**p-값:** {st.session_state.stationarity_result['p_value']:.4f}")
-                    
-                    # 정상성 여부
+                # 시각적 구분선 추가
+                st.markdown("---")
+                
+                # 정상성 결과 컨테이너
+                with st.container():
+                    # 정상성 여부 먼저 큰 글씨로 표시
                     if st.session_state.stationarity_result['is_stationary']:
-                        st.success("시계열 데이터가 정상성을 만족합니다.")
+                        st.success("### ✅ 시계열 데이터가 정상성을 만족합니다")
                     else:
-                        st.warning("시계열 데이터가 정상성을 만족하지 않습니다.")
-                
-                with col2:
-                    st.write("**임계값:**")
-                    for key, value in st.session_state.stationarity_result['critical_values'].items():
-                        st.write(f"{key}: {value:.4f}")
-                
+                        st.warning("### ⚠️ 시계열 데이터가 정상성을 만족하지 않습니다")
+                        
+                    # 설명 추가
+                    with st.expander("정상성 판단 기준 설명", expanded=False):
+                        st.markdown("""
+                        - **ADF 통계량**이 임계값보다 **작을수록** 정상성 가능성이 높습니다
+                        - **p-값**이 0.05보다 **작으면** 정상성을 만족합니다
+                        - ADF 통계량이 임계값보다 작을수록, 그리고 p-값이 작을수록 정상성 가능성이 높습니다
+                        """)
+                    
+                    # 메트릭 표시를 위한 3개 컬럼
+                    metric_col1, metric_col2, metric_col3 = st.columns(3)
+                    
+                    # ADF 통계량 (첫 번째 메트릭)
+                    test_stat = st.session_state.stationarity_result['test_statistic']
+                    critical_1pct = st.session_state.stationarity_result['critical_values']['1%']
+                    # ADF 통계량과 1% 임계값의 차이
+                    delta_adf = test_stat - critical_1pct
+                    
+                    # 시각화: ADF 통계량이 임계값보다 작으면 좋은 것이므로 delta_color="inverse" 사용
+                    metric_col1.metric(
+                        label="ADF 통계량",
+                        value=f"{test_stat:.4f}",
+                        delta=f"{delta_adf:.4f}",
+                        delta_color="inverse",
+                        help="ADF 통계량이 임계값보다 작을수록 정상성 가능성이 높습니다",
+                        border=True
+                    )
+                    
+                    # p-값 (두 번째 메트릭)
+                    p_value = st.session_state.stationarity_result['p_value']
+                    # p-값과 0.05의 차이
+                    delta_p = p_value - 0.05
+                    
+                    # 시각화: p-값이 작을수록 좋은 것이므로 delta_color="inverse" 사용
+                    metric_col2.metric(
+                        label="p-값",
+                        value=f"{p_value:.4f}",
+                        delta=f"{delta_p:.4f}",
+                        delta_color="inverse",
+                        help="p-값이 0.05보다 작으면 정상성을 만족합니다",
+                        border=True
+                    )
+                    
+                    # 관측 수 (세 번째 메트릭)
+                    num_obs = st.session_state.stationarity_result['num_observations']
+                    metric_col3.metric(
+                        label="관측 데이터 수",
+                        value=f"{num_obs:,}",
+                        help="정상성 검정에 사용된 데이터 수",
+                        border=True
+                    )
+                    
+                    # 임계값 카드
+                    st.markdown("### 📊 임계값 (Critical Values)")
+                    
+                    # 임계값 표시를 위한 3개 컬럼
+                    crit_col1, crit_col2, crit_col3 = st.columns(3)
+                    
+                    # 각 임계값을 메트릭으로 표시
+                    for i, (key, value) in enumerate(st.session_state.stationarity_result['critical_values'].items()):
+                        # ADF 통계량과 임계값의 차이
+                        delta_crit = test_stat - value
+                        # 색상 설정: ADF 통계량이 임계값보다 작으면 좋은 것이므로 inverse 사용
+                        color_setting = "inverse"
+                        
+                        # 각 컬럼에 임계값 메트릭 추가
+                        if i == 0:  # 1% 임계값
+                            crit_col1.metric(
+                                label=f"임계값 ({key})",
+                                value=f"{value:.4f}",
+                                delta=f"{delta_crit:.4f}",
+                                delta_color=color_setting,
+                                help=f"ADF 통계량이 {key} 임계값보다 작으면 {key} 유의수준에서 정상성 만족",
+                                border=True
+                            )
+                        elif i == 1:  # 5% 임계값
+                            crit_col2.metric(
+                                label=f"임계값 ({key})",
+                                value=f"{value:.4f}",
+                                delta=f"{delta_crit:.4f}",
+                                delta_color=color_setting,
+                                help=f"ADF 통계량이 {key} 임계값보다 작으면 {key} 유의수준에서 정상성 만족",
+                                border=True
+                            )
+                        elif i == 2:  # 10% 임계값
+                            crit_col3.metric(
+                                label=f"임계값 ({key})",
+                                value=f"{value:.4f}",
+                                delta=f"{delta_crit:.4f}",
+                                delta_color=color_setting,
+                                help=f"ADF 통계량이 {key} 임계값보다 작으면 {key} 유의수준에서 정상성 만족",
+                                border=True
+                            )
+                            
                 # ACF, PACF 분석
+                st.markdown("---")
                 st.subheader("📊 ACF/PACF 분석")
                 
                 # ACF, PACF 계산
@@ -488,6 +665,20 @@ def main():
                 
                 acf_pacf_fig = visualizer.plot_acf_pacf(st.session_state.acf_values, st.session_state.pacf_values)
                 st.plotly_chart(acf_pacf_fig, use_container_width=True, theme="streamlit")
+
+                with st.expander("✅ 용어 정리", expanded=True):
+                    st.info("""
+🔹 ACF (Autocorrelation Function, 자기상관함수)
+
+	•	현재 시점의 값과 이전 시점들의 값들(lag) 간의 상관관계를 측정
+	•	여러 시차(lag)에 걸친 전체적인 상관성을 파악함
+	•	AR(p) 모델에서 p값 추정에 도움
+
+🔹 PACF (Partial Autocorrelation Function, 부분 자기상관함수)
+
+	•	중간에 끼어 있는 시점들의 영향을 제거하고, 지정한 lag와 직접적인 상관만 추정
+	•	즉, lag-k와 현재 시점 사이의 순수한 직접 관계만 보는 것
+	•	AR(p) 모델에서 p의 결정에 매우 중요""")
             except Exception as e:
                 st.error(f"정상성 검정 중 오류 발생: {str(e)}")
         
