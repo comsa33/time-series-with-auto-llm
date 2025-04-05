@@ -16,9 +16,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     fonts-nanum \
     fonts-noto-cjk \
-    language-pack-ko \
+    locales \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# 한글 로케일 설정
+RUN sed -i -e 's/# ko_KR.UTF-8 UTF-8/ko_KR.UTF-8 UTF-8/' /etc/locale.gen && \
+    locale-gen
+ENV LANG ko_KR.UTF-8
+ENV LC_ALL ko_KR.UTF-8
 
 # 폰트 캐시 갱신
 RUN fc-cache -fv
