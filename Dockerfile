@@ -17,6 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-nanum \
     fonts-noto-cjk \
     locales \
+    fontconfig \
+    fontconfig-config \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
