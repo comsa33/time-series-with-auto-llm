@@ -37,9 +37,9 @@ class TimeSeriesVisualizer(metaclass=Singleton):
     
     def plot_timeseries(self, 
                        data: pd.Series, 
-                       title: str = "Time Series Plot",
-                       xlabel: str = "Date",
-                       ylabel: str = "Value",
+                       title: str = "시계열 플롯 (Time Series Plot)",
+                       xlabel: str = "날짜 (Date)",
+                       ylabel: str = "값 (Value)",
                        color: str = '#1f77b4',
                        figsize: Tuple[int, int] = (12, 6),
                        **kwargs) -> Figure:
@@ -93,22 +93,22 @@ class TimeSeriesVisualizer(metaclass=Singleton):
         
         # 관측값
         decomposition['observed'].plot(ax=axes[0])
-        axes[0].set_title('Observed')
+        axes[0].set_title('관측값 (Observed)')
         axes[0].set_xlabel('')
         
         # 추세
         decomposition['trend'].plot(ax=axes[1])
-        axes[1].set_title('Trend')
+        axes[1].set_title('추세 (Trend)')
         axes[1].set_xlabel('')
         
         # 계절성
         decomposition['seasonal'].plot(ax=axes[2])
-        axes[2].set_title('Seasonality')
+        axes[2].set_title('계절성 (Seasonality)')
         axes[2].set_xlabel('')
         
         # 잔차
         decomposition['resid'].plot(ax=axes[3])
-        axes[3].set_title('Residuals')
+        axes[3].set_title('잔차 (Residuals)')
         
         plt.tight_layout()
         
@@ -135,9 +135,9 @@ class TimeSeriesVisualizer(metaclass=Singleton):
         
         # ACF 플롯
         axes[0].stem(range(len(acf_values)), acf_values)
-        axes[0].set_title('Autocorrelation Function')
-        axes[0].set_xlabel('Lag')
-        axes[0].set_ylabel('Correlation')
+        axes[0].set_title('자기상관 함수 (Autocorrelation Function)')
+        axes[0].set_xlabel('지연 (Lag)')
+        axes[0].set_ylabel('상관도 (Correlation)')
         
         # 신뢰 구간 (95%)
         confidence = 1.96 / np.sqrt(len(acf_values))
@@ -146,9 +146,9 @@ class TimeSeriesVisualizer(metaclass=Singleton):
         
         # PACF 플롯
         axes[1].stem(range(len(pacf_values)), pacf_values)
-        axes[1].set_title('Partial Autocorrelation Function')
-        axes[1].set_xlabel('Lag')
-        axes[1].set_ylabel('Correlation')
+        axes[1].set_title('부분 자기상관 함수 (Partial Autocorrelation Function)')
+        axes[1].set_xlabel('지연 (Lag)')
+        axes[1].set_ylabel('상관도 (Correlation)')
         
         # 신뢰 구간 (95%)
         confidence = 1.96 / np.sqrt(len(pacf_values))
@@ -193,9 +193,9 @@ class TimeSeriesVisualizer(metaclass=Singleton):
                   linestyle='--')
         
         # 그래프 스타일 설정
-        ax.set_title('Forecast Comparison')
-        ax.set_xlabel('Date')
-        ax.set_ylabel('Value')
+        ax.set_title('예측 비교 (Forecast Comparison)')
+        ax.set_xlabel('날짜 (Date)')
+        ax.set_ylabel('값 (Value)')
         ax.legend()
         
 # x축 날짜 포맷 설정
@@ -304,27 +304,28 @@ class TimeSeriesVisualizer(metaclass=Singleton):
         
         # 잔차 시계열 플롯
         axes[0, 0].plot(actual.index[:min_len], residuals)
-        axes[0, 0].set_title('Residuals Over Time')
-        axes[0, 0].set_xlabel('Date')
-        axes[0, 0].set_ylabel('Residual')
+        axes[0, 0].set_title('잔차 시계열 (Residuals Over Time)')
+        axes[0, 0].set_xlabel('날짜 (Date)')
+        axes[0, 0].set_ylabel('잔차 (Residual)')
         axes[0, 0].axhline(y=0, linestyle='--', color='red')
+        axes[0, 0].tick_params(axis='x', rotation=90)
         
         # 잔차 히스토그램
         axes[0, 1].hist(residuals, bins=20, edgecolor='black')
-        axes[0, 1].set_title('Residual Distribution')
-        axes[0, 1].set_xlabel('Residual')
-        axes[0, 1].set_ylabel('Frequency')
+        axes[0, 1].set_title('잔차 분포 (Residual Distribution)')
+        axes[0, 1].set_xlabel('잔차 (Residual)')
+        axes[0, 1].set_ylabel('빈도 (Frequency)')
         
         # 잔차 QQ 플롯
         from scipy import stats
         stats.probplot(residuals, dist="norm", plot=axes[1, 0])
-        axes[1, 0].set_title('Normal Q-Q Plot')
+        axes[1, 0].set_title('정규 Q-Q 플롯 (Normal Q-Q Plot)')
         
         # 잔차 vs 예측값
         axes[1, 1].scatter(predicted_values, residuals)
-        axes[1, 1].set_title('Residuals vs Predicted')
-        axes[1, 1].set_xlabel('Predicted Values')
-        axes[1, 1].set_ylabel('Residuals')
+        axes[1, 1].set_title('잔차 vs 예측값 (Residuals vs Predicted)')
+        axes[1, 1].set_xlabel('예측값 (Predicted Values)')
+        axes[1, 1].set_ylabel('잔차 (Residuals)')
         axes[1, 1].axhline(y=0, linestyle='--', color='red')
         
         plt.tight_layout()
@@ -376,9 +377,9 @@ class TimeSeriesVisualizer(metaclass=Singleton):
         ax.barh(y_pos, top_importance, align='center')
         ax.set_yticks(y_pos)
         ax.set_yticklabels(top_features)
-        ax.invert_yaxis()  # 위에서부터 중요도 높은 순으로
-        ax.set_xlabel('Feature Importance')
-        ax.set_title('Top Feature Importance')
+        ax.invert_yaxis()
+        ax.set_xlabel('특성 중요도 (Feature Importance)')
+        ax.set_title('상위 특성 중요도 (Top Feature Importance)')
         
         plt.tight_layout()
         
