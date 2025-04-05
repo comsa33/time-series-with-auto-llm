@@ -3,13 +3,11 @@
 """
 import os
 import warnings
-import traceback
 from datetime import datetime, timedelta
 
 import streamlit as st
 import pandas as pd
 import numpy as np
-from dotenv import load_dotenv
 
 from config.settings import app_config
 from utils.data_reader import get_seoul_air_quality
@@ -18,15 +16,8 @@ from utils.visualizer import TimeSeriesVisualizer
 from utils.llm_connector import LLMConnector
 from prompts.time_series_analysis_prompt import TIME_SERIES_ANALYSIS_PROMPT
 
-# 환경 변수 로드
-load_dotenv()
-
 # 경고 메시지 무시
 warnings.filterwarnings('ignore')
-
-
-OLLAMA_SERVER = os.getenv("OLLAMA_SERVER")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL")
 
 
 # 페이지 설정
@@ -134,8 +125,8 @@ def render_header():
     """
     앱 헤더 렌더링
     """
-    st.title("Air Quality Time Series Analysis")
-    st.markdown("Seoul City IoT Data Time Series Analysis App")
+    st.title("서울시 대기질 시계열 분석")
+    st.markdown("서울시 IoT 데이터를 활용한 시계열 분석 앱")
     
     # 확장 가능한 앱 소개
     with st.expander("📌 App Introduction and Usage"):
@@ -292,84 +283,58 @@ def main():
     render_header()
     
     # 사이드바 설정
-    st.sidebar.header("📊 Analysis Settings")
-    
-    # 데이터 로드 방식 선택
-    data_source = st.sidebar.radio(
-        "Select Data Source",
-        ["API에서 가져오기", "파일 업로드"],
-        key="data_source",
-        on_change=on_data_source_change
-    )
+    st.sidebar.header("📊 분석 설정")
+
+    st.sidebar.markdown("---")
     
     # 데이터 로드
-    if data_source == "API에서 가져오기":
-        st.sidebar.subheader("API Settings")
-        
-        # 날짜 범위 선택
-        today = datetime.now()
-        default_end_date = today.strftime("%Y-%m-%d")
-        default_start_date = (today - timedelta(days=30)).strftime("%Y-%m-%d")
-        
-        start_date = st.sidebar.date_input(
-            "Start Date",
-            datetime.strptime(default_start_date, "%Y-%m-%d")
-        )
-        
-        end_date = st.sidebar.date_input(
-            "End Date",
-            datetime.strptime(default_end_date, "%Y-%m-%d")
-        )
-        
-        if st.sidebar.button("Get Data"):
-            with st.spinner("Getting data from Seoul City API..."):
-                df = load_data(
-                    start_date=start_date.strftime("%Y-%m-%d"),
-                    end_date=end_date.strftime("%Y-%m-%d")
-                )
-                if df is not None and not df.empty:
-                    st.session_state.df = df
-    else:
-        st.sidebar.subheader("File Upload")
-        
-        # 파일 업로드
-        uploaded_file = st.sidebar.file_uploader("Upload CSV File", type=["csv"])
-        
-        if uploaded_file is not None:
-            df = pd.read_csv(uploaded_file)
-            if 'MSRDT' in df.columns:
-                df['MSRDT'] = pd.to_datetime(df['MSRDT'])
-            st.session_state.df = df
-        else:
-            # 기존 파일 사용
-            if os.path.exists(app_config.DEFAULT_DATA_FILE):
-                use_existing = st.sidebar.checkbox("Use Existing Data", value=True)
-                if use_existing:
-                    df = load_data(file_path=app_config.DEFAULT_DATA_FILE)
-                    if df is not None and not df.empty:
-                        st.session_state.df = df
-            else:
-                st.sidebar.warning("No saved data file found. Please upload a file or get data from API.")
+    st.sidebar.subheader("서울시 대기질 데이터 로드", help="서울시 IoT 대기질 데이터 API를 통해 데이터를 실시간으로 가져옵니다.")
+    
+    # 날짜 범위 선택
+    today = datetime.now()
+    default_end_date = today.strftime("%Y-%m-%d")
+    default_start_date = (today - timedelta(days=30)).strftime("%Y-%m-%d")
+    
+    start_date = st.sidebar.date_input(
+        "Start Date",
+        datetime.strptime(default_start_date, "%Y-%m-%d")
+    )
+    
+    end_date = st.sidebar.date_input(
+        "End Date",
+        datetime.strptime(default_end_date, "%Y-%m-%d")
+    )
+    
+    if st.sidebar.button("데이터 가져오기"):
+        with st.spinner("서울시 API에서 데이터를 가져오는 중..."):
+            df = load_data(
+                start_date=start_date.strftime("%Y-%m-%d"),
+                end_date=end_date.strftime("%Y-%m-%d")
+            )
+            if df is not None and not df.empty:
+                st.session_state.df = df
+
+    st.sidebar.markdown("---")
     
     # 데이터가 로드되면 분석 시작
     if st.session_state.df is not None and not st.session_state.df.empty:
         # 데이터 기본 정보 표시
-        with st.expander("📋 Data Preview", expanded=True):
+        with st.expander("📋 데이터 미리보기", expanded=True):
             st.write(st.session_state.df.head())
             
             col1, col2 = st.columns(2)
             
             with col1:
-                st.write(f"**Data Size:** {st.session_state.df.shape[0]} rows × {st.session_state.df.shape[1]} columns")
-                st.write(f"**Period:** {st.session_state.df['MSRDT'].min()} ~ {st.session_state.df['MSRDT'].max()}")
+                st.write(f"**데이터 크기:** {st.session_state.df.shape[0]} 행 × {st.session_state.df.shape[1]} 열")
+                st.write(f"**기간:** {st.session_state.df['MSRDT'].min()} ~ {st.session_state.df['MSRDT'].max()}")
             
             with col2:
                 if 'MSRSTE_NM' in st.session_state.df.columns:
-                    st.write(f"**Number of Stations:** {st.session_state.df['MSRSTE_NM'].nunique()}")
-                    st.write(f"**Station List:** {', '.join(sorted(st.session_state.df['MSRSTE_NM'].unique()))}")
+                    st.write(f"**측정소 수:** {st.session_state.df['MSRSTE_NM'].nunique()}개")
+                    st.write(f"**측정소 목록:** {', '.join(sorted(st.session_state.df['MSRSTE_NM'].unique()))}")
         
         # 분석 옵션 설정
-        st.sidebar.subheader("🔍 Analysis Options")
+        st.sidebar.subheader("🔍 시계열 분석 옵션")
         
         # 측정소 선택
         if 'MSRSTE_NM' in st.session_state.df.columns:
@@ -386,7 +351,7 @@ def main():
                 st.session_state.selected_station = selected_station
         else:
             st.session_state.selected_station = None
-            st.sidebar.info("No station information available.")
+            st.sidebar.info("측정소 정보가 없습니다.")
         
         # 타겟 변수 선택
         numeric_columns = st.session_state.df.select_dtypes(include=np.number).columns.tolist()
@@ -397,13 +362,13 @@ def main():
         
         if target_options:
             selected_target = st.sidebar.selectbox(
-                "Select Variable", 
+                "분석할 변수 선택", 
                 target_options,
                 index=0 if st.session_state.selected_target is None else target_options.index(st.session_state.selected_target)
             )
             st.session_state.selected_target = selected_target
         else:
-            st.error("No numeric variables available for analysis.")
+            st.error("분석 가능한 숫자형 변수가 없습니다.")
             return
         
         # 시리즈 데이터 업데이트
@@ -420,7 +385,7 @@ def main():
         
         with tab1:
             # 시계열 데이터 시각화
-            st.subheader("📈 Time Series Visualization")
+            st.subheader("📈 시계열 시각화")
             
             # 선택한 측정소와 변수에 대한 시계열 그래프
             station_text = f"{st.session_state.selected_station} " if st.session_state.selected_station else "Seoul City Overall "
@@ -433,17 +398,18 @@ def main():
         
         with tab2:
             # 시계열 분해
-            st.subheader("🔄 Time Series Decomposition")
+            st.subheader("🔄 시계열 분해", help="시계열 분해(Time Series Decomposition)란, **시계열 데이터를 구성하는 여러 요소(성분)**를 분리해내는 기법입니다. 이를 통해 데이터의 구조를 더 잘 이해하고, 예측력 높은 모델을 만들 수 있습니다.")
             
             # 계절성 주기 선택
             min_period = 2
             max_period = min(len(st.session_state.series) // 2, 168)  # 최대 일주일(168시간) 또는 데이터 길이의 절반
             
             period = st.slider(
-                "Seasonality Period (hours)",
+                "계절성 주기 (시간 단위)",
                 min_value=min_period,
                 max_value=max_period,
-                value=st.session_state.period
+                value=st.session_state.period,
+                help="계절성 주기를 선택하세요. 예: 24시간은 하루 주기를 의미합니다."
             )
             st.session_state.period = period
             
@@ -455,11 +421,11 @@ def main():
                 decomp_fig = visualizer.plot_decomposition(st.session_state.decomposition)
                 st.pyplot(decomp_fig)
             except Exception as e:
-                st.error(f"Error in time series decomposition: {str(e)}")
+                st.error(f"시계열 분해 중 오류 발생: {str(e)}")
         
         with tab3:
             # 정상성 검정
-            st.subheader("🔍 Stationarity Test")
+            st.subheader("🔍 정상성 검정", help="정상성 검정(Stationarity Test)이란 시계열 데이터가 시간이 지나도 통계적 특성이 일정한지(=정상인지) 확인하는 검정입니다. 즉, 평균, 분산, 자기공분산 등의 값이 시간에 따라 변하지 않는지를 확인하는 것입니다")
             
             try:
                 # 정상성 검정 수행
@@ -467,24 +433,23 @@ def main():
                 
                 # 정상성 검정 결과 표시
                 col1, col2 = st.columns(2)
-                
                 with col1:
-                    st.write(f"**ADF Statistic:** {st.session_state.stationarity_result['test_statistic']:.4f}")
-                    st.write(f"**p-value:** {st.session_state.stationarity_result['p_value']:.4f}")
+                    st.write(f"**ADF 통계량:** {st.session_state.stationarity_result['test_statistic']:.4f}")
+                    st.write(f"**p-값:** {st.session_state.stationarity_result['p_value']:.4f}")
                     
                     # 정상성 여부
                     if st.session_state.stationarity_result['is_stationary']:
-                        st.success("The time series data is stationary.")
+                        st.success("시계열 데이터가 정상성을 만족합니다.")
                     else:
-                        st.warning("The time series data is not stationary.")
+                        st.warning("시계열 데이터가 정상성을 만족하지 않습니다.")
                 
                 with col2:
-                    st.write("**Critical Values:**")
+                    st.write("**임계값:**")
                     for key, value in st.session_state.stationarity_result['critical_values'].items():
                         st.write(f"{key}: {value:.4f}")
                 
                 # ACF, PACF 분석
-                st.subheader("📊 ACF/PACF Analysis")
+                st.subheader("📊 ACF/PACF 분석")
                 
                 # ACF, PACF 계산
                 st.session_state.acf_values, st.session_state.pacf_values = data_processor.get_acf_pacf(st.session_state.series)
@@ -492,15 +457,15 @@ def main():
                 acf_pacf_fig = visualizer.plot_acf_pacf(st.session_state.acf_values, st.session_state.pacf_values)
                 st.pyplot(acf_pacf_fig)
             except Exception as e:
-                st.error(f"Error in stationarity test: {str(e)}")
+                st.error(f"정상성 검정 중 오류 발생: {str(e)}")
         
         with tab4:
             # 모델 학습 및 예측
-            st.subheader("🤖 Model Training & Prediction")
+            st.subheader("🤖 모델 학습 및 예측")
             
             # 사이드바에 훈련/테스트 분할 옵션 추가
             test_size = st.sidebar.slider(
-                "Test Data Ratio",
+                "테스트 데이터 비율",
                 min_value=0.1,
                 max_value=0.5,
                 value=st.session_state.test_size,
@@ -512,31 +477,29 @@ def main():
             model_factory = get_model_factory()
             
             if model_factory is None:
-                st.error("Model factory loading failed. May be pmdarima compatibility issue.")
-                st.error("Try running the following command:")
-                st.code("pip uninstall -y pmdarima numpy && pip install numpy==1.24.3 && pip install pmdarima==2.0.4")
+                st.error("모델 팩토리 로드에 실패했습니다. pmdarima 호환성 문제일 수 있습니다.")
             else:
                 available_models = model_factory.get_all_available_models()
                 
                 selected_models = st.sidebar.multiselect(
-                    "Select Models",
+                    "모델 선택",
                     available_models,
                     default=available_models[:2] if not st.session_state.selected_models else st.session_state.selected_models
                 )
                 st.session_state.selected_models = selected_models
                 
                 # 모델 학습 및 예측 버튼
-                if st.button("Start Model Training & Prediction"):
+                if st.button("모델 학습 및 예측 시작"):
                     if not selected_models:
-                        st.warning("Please select at least one model.")
+                        st.warning("최소한 하나의 모델을 선택해주세요.")
                     else:
-                        with st.spinner("Training models..."):
+                        with st.spinner("모델을 학습 중입니다..."):
                             train_models()
             
             # 모델 학습 결과 표시
             if st.session_state.models_trained and st.session_state.forecasts:
                 # 예측 결과 비교 시각화
-                st.subheader("📊 Forecast Comparison")
+                st.subheader("📊 예측 비교")
                 comparison_fig = visualizer.plot_forecast_comparison(
                     st.session_state.train, 
                     st.session_state.test, 
@@ -545,45 +508,22 @@ def main():
                 st.pyplot(comparison_fig)
                 
                 # 메트릭 비교 시각화
-                st.subheader("📈 Model Performance Comparison")
+                st.subheader("📈 모델 성능 비교")
                 metrics_fig = visualizer.plot_metrics_comparison(st.session_state.metrics)
                 st.pyplot(metrics_fig)
                 
                 # 메트릭 표 표시
-                st.subheader("📋 Model Performance Metrics")
+                st.subheader("📋 모델 성능 메트릭")
                 metrics_df = pd.DataFrame({model: st.session_state.metrics[model] for model in st.session_state.metrics})
                 st.write(metrics_df)
                 
                 # 최적 모델 선택
                 if st.session_state.best_model:
-                    st.success(f"Best Model (based on RMSE): {st.session_state.best_model}")
-                
-                # 모델 해석 및 인사이트
-                st.subheader("🔍 Model Interpretation & Insights")
-                
-                st.markdown(f"""
-                ### 시계열 분석 결과
-                
-                1. **데이터 특성**:
-                   - 선택한 변수 ({st.session_state.selected_target})는 뚜렷한 일별 및 주별 패턴을 보입니다.
-                   - 분해 결과에서 확인할 수 있듯이, {st.session_state.period}시간 주기의 계절성이 존재합니다.
-                
-                2. **모델 성능 비교**:
-                   - {st.session_state.best_model} 모델이 RMSE 기준으로 가장 우수한 성능을 보였습니다.
-                   - 모델 특성:
-                     - ARIMA: 시계열 데이터의 자기상관성을 활용한 통계적 모델
-                     - 지수평활법: 최근 관측값에 더 높은 가중치를 부여하는 방법
-                     - Prophet: 트렌드, 계절성, 공휴일 효과를 고려한 Facebook의 시계열 모델
-                     - LSTM: 순환 신경망을 활용한 딥러닝 기반 시계열 예측 모델
-                
-                3. **적용 가능성**:
-                   - 이 예측 모델은 서울시 대기질 예보 시스템 개발에 활용될 수 있습니다.
-                   - 미세먼지 농도가 높아질 것으로 예상되는 시점을 예측하여 시민 건강 보호에 기여할 수 있습니다.
-                """)
+                    st.success(f"최적 모델 (RMSE 기준): {st.session_state.best_model}")
                 
                 # 선택한 최적 모델 상세 분석
                 if st.session_state.best_model in st.session_state.forecasts:
-                    st.subheader(f"📈 Best Model ({st.session_state.best_model}) Detailed Analysis")
+                    st.subheader(f"📈 최적 모델 ({st.session_state.best_model}) 상세 분석")
                     
                     # 실제값과 예측값 비교
                     best_forecast = st.session_state.forecasts[st.session_state.best_model]
@@ -596,7 +536,7 @@ def main():
             st.subheader("🤖 LLM 시계열 데이터 분석")
             
             with st.expander("📊 LLM 분석 설정", expanded=True):
-                st.info("Ollama 서버를 통해 Gemma3:27b 모델로 시계열 분석 결과를 자동으로 분석합니다.")
+                st.info(f"Ollama 서버를 통해 {app_config.OLLAMA_MODEL} 모델로 시계열 분석 결과를 자동으로 분석합니다.")
             
             def check_analysis_ready():
                 """
@@ -633,11 +573,10 @@ def main():
                 else:
                     with st.spinner("LLM을 통해 시계열 분석 결과를 분석 중입니다..."):
                         try:
-                            # LLM 연결 객체 초기화
-                            from utils.llm_connector import LLMConnector
-                            from prompts.time_series_analysis_prompt import TIME_SERIES_ANALYSIS_PROMPT
-                            
-                            llm_connector = LLMConnector(base_url=OLLAMA_SERVER, model=OLLAMA_MODEL)
+                            llm_connector = LLMConnector(
+                                base_url=app_config.OLLAMA_SERVER,
+                                model=app_config.OLLAMA_MODEL
+                            )
                             
                             # 데이터 정보 수집 - 안전하게 값 추출
                             data_info = {
@@ -751,8 +690,6 @@ def main():
                             
                         except Exception as e:
                             st.error(f"LLM 분석 중 오류 발생: {str(e)}")
-                            import traceback
-                            st.error(traceback.format_exc())
 
             # 이전에 분석한 결과가 있으면 표시
             elif hasattr(st.session_state, 'llm_analysis') and st.session_state.llm_analysis:
@@ -766,7 +703,7 @@ def main():
                     mime="text/markdown"
                 )
     else:
-        st.info("Please upload data or get data from API to start analysis.")
+        st.info("분석을 시작하려면 데이터를 업로드하거나 API에서 데이터를 가져오세요.")
 
 # 앱 실행
 if __name__ == "__main__":

@@ -6,8 +6,9 @@ from dataclasses import dataclass
 
 from dotenv import load_dotenv
 
-# 환경 변수 로드
-load_dotenv()
+# 환경 변수 로드(개발환경에서는 .env 파일 사용)
+if os.getenv("ENV") is not "production":
+    load_dotenv(".env")
 
 
 @dataclass
@@ -27,6 +28,10 @@ class AppConfig:
     SEOUL_API_KEY: str = os.getenv("SEOUL_API_KEY")
     SEOUL_API_BASE_URL: str = os.getenv("SEOUL_API_BASE_URL")
     SEOUL_AIR_QUALITY_SERVICE: str = os.getenv("SEOUL_AIR_QUALITY_SERVICE")
+
+    # Ollama API 설정
+    OLLAMA_SERVER: str = os.getenv("OLLAMA_SERVER") 
+    OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL")
     
     # 시각화 설정
     PLOT_BACKGROUND_COLOR: str = "#ffffff"
