@@ -4,10 +4,11 @@
 import os
 from dataclasses import dataclass
 
-from dotenv import dotenv_values
+from dotenv import load_dotenv
 
-# .env 파일에서 환경 변수 읽기
-env_config = dotenv_values(".env")
+# 환경 변수 로드
+load_dotenv()
+
 
 @dataclass
 class AppConfig:
@@ -23,9 +24,9 @@ class AppConfig:
     DEFAULT_DATA_FILE: str = os.path.join(DATA_DIR, "seoul_air_quality_data.csv")
     
     # API 설정
-    SEOUL_API_KEY: str = env_config["SEOUL_API_KEY"]
-    SEOUL_API_BASE_URL: str = env_config["SEOUL_API_BASE_URL"]
-    SEOUL_AIR_QUALITY_SERVICE: str = env_config["SEOUL_AIR_QUALITY_SERVICE"]
+    SEOUL_API_KEY: str = os.getenv("SEOUL_API_KEY")
+    SEOUL_API_BASE_URL: str = os.getenv("SEOUL_API_BASE_URL")
+    SEOUL_AIR_QUALITY_SERVICE: str = os.getenv("SEOUL_AIR_QUALITY_SERVICE")
     
     # 시각화 설정
     PLOT_BACKGROUND_COLOR: str = "#ffffff"
