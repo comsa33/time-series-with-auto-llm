@@ -30,6 +30,9 @@ COPY poetry.lock* ./
 # 종속성 설치
 RUN poetry install --no-interaction --no-ansi --no-root
 
+# data 디렉토리 생성
+RUN mkdir -p /app/data
+
 # 소스코드 복사
 COPY . .
 
