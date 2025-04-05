@@ -1,15 +1,17 @@
 """
 시계열 데이터 시각화를 위한 모듈
 """
-from typing import Dict, Tuple
+from typing import Dict
 
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy import stats
 import seaborn as sns
-import matplotlib.dates as mdates
-from matplotlib.figure import Figure
 from matplotlib import font_manager, rc
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 from utils.singleton import Singleton
 
@@ -35,186 +37,322 @@ class TimeSeriesVisualizer(metaclass=Singleton):
         rc('font', family=font_name)
         plt.rcParams['axes.unicode_minus'] = False
     
-    def plot_timeseries(self, 
-                       data: pd.Series, 
-                       title: str = "시계열 플롯 (Time Series Plot)",
-                       xlabel: str = "날짜 (Date)",
-                       ylabel: str = "값 (Value)",
-                       color: str = '#1f77b4',
-                       figsize: Tuple[int, int] = (12, 6),
-                       **kwargs) -> Figure:
+    def plot_timeseries(
+            self, 
+            data: pd.Series, 
+            title: str = "시계열 플롯 (Time Series Plot)",
+            xlabel: str = "날짜 (Date)",
+            ylabel: str = "값 (Value)",
+            color: str = '#1f77b4',
+            **kwargs
+        ) -> go.Figure:
         """
-        기본 시계열 플롯을 생성합니다.
-        
-        Args:
-            data: 시각화할 시계열 데이터
-            title: 그래프 제목
-            xlabel: x축 레이블
-            ylabel: y축 레이블
-            color: 선 색상
-            figsize: 그래프 크기
-            **kwargs: 추가 매개변수
-            
-        Returns:
-            Matplotlib Figure 객체
+        기본 시계열 플롯을 생성합니다 (Plotly 버전).
         """
-        fig, ax = plt.subplots(figsize=figsize)
+        # Plotly 버전으로 구현
+        fig = px.line(
+            x=data.index, 
+            y=data.values,
+            labels={"x": xlabel, "y": ylabel},
+            title=title
+        )
         
-        # 시계열 데이터 플롯
-        ax.plot(data.index, data.values, color=color, **kwargs)
+        # 스타일 설정
+        fig.update_layout(
+            title=title,
+            title_font_size=14,
+            height=400,
+            margin=dict(l=10, r=10, t=50, b=10),
+        )
         
-        # 그래프 스타일 설정
-        ax.set_title(title)
-        ax.set_xlabel(xlabel)
-        ax.set_ylabel(ylabel)
-        
-        # x축 날짜 포맷 설정
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-        plt.xticks(rotation=45)
-        
-        plt.tight_layout()
+        # 날짜 형식 지정
+        fig.update_xaxes(
+            tickformat="%Y-%m-%d",
+        )
         
         return fig
     
-    def plot_decomposition(self, 
-                          decomposition: Dict[str, pd.Series],
-                          figsize: Tuple[int, int] = (12, 10)) -> Figure:
+    def plot_decomposition(
+            self, 
+            decomposition: Dict[str, pd.Series],
+            **kwargs
+        ) -> go.Figure:
         """
-        시계열 분해 결과를 시각화합니다.
-        
-        Args:
-            decomposition: 시계열 분해 결과 딕셔너리
-            figsize: 그래프 크기
-            
-        Returns:
-            Matplotlib Figure 객체
+        시계열 분해 결과를 시각화합니다 (Plotly 버전).
         """
-        fig, axes = plt.subplots(4, 1, figsize=figsize, sharex=True)
+        # 서브플롯 생성
+        fig = make_subplots(
+            rows=4, cols=1,
+            subplot_titles=('관측값 (Observed)', '추세 (Trend)', '계절성 (Seasonality)', '잔차 (Residuals)'),
+            shared_xaxes=True,
+            vertical_spacing=0.05
+        )
         
         # 관측값
-        decomposition['observed'].plot(ax=axes[0])
-        axes[0].set_title('관측값 (Observed)')
-        axes[0].set_xlabel('')
+        fig.add_trace(
+            go.Scatter(x=decomposition['observed'].index, y=decomposition['observed'].values,
+                    mode='lines', name='관측값'),
+            row=1, col=1
+        )
         
         # 추세
-        decomposition['trend'].plot(ax=axes[1])
-        axes[1].set_title('추세 (Trend)')
-        axes[1].set_xlabel('')
+        fig.add_trace(
+            go.Scatter(x=decomposition['trend'].index, y=decomposition['trend'].values,
+                    mode='lines', name='추세'),
+            row=2, col=1
+        )
         
         # 계절성
-        decomposition['seasonal'].plot(ax=axes[2])
-        axes[2].set_title('계절성 (Seasonality)')
-        axes[2].set_xlabel('')
+        fig.add_trace(
+            go.Scatter(x=decomposition['seasonal'].index, y=decomposition['seasonal'].values,
+                    mode='lines', name='계절성'),
+            row=3, col=1
+        )
         
         # 잔차
-        decomposition['resid'].plot(ax=axes[3])
-        axes[3].set_title('잔차 (Residuals)')
+        fig.add_trace(
+            go.Scatter(x=decomposition['resid'].index, y=decomposition['resid'].values,
+                    mode='lines', name='잔차'),
+            row=4, col=1
+        )
         
-        plt.tight_layout()
+        # 스타일 업데이트
+        fig.update_layout(
+            height=800,
+            margin=dict(l=10, r=10, t=30, b=10),
+            showlegend=False
+        )
         
         return fig
     
-    def plot_acf_pacf(self, 
-                     acf_values: np.ndarray, 
-                     pacf_values: np.ndarray,
-                     lags: int = 40,
-                     figsize: Tuple[int, int] = (12, 6)) -> Figure:
+    def plot_acf_pacf(self,
+                    acf_values: np.ndarray,
+                    pacf_values: np.ndarray,
+                    lags: int = 40,
+                    **kwargs) -> go.Figure:
         """
-        ACF 및 PACF 플롯을 생성합니다.
+        ACF 및 PACF 플롯을 생성합니다 (Plotly 버전).
         
         Args:
             acf_values: ACF 값
             pacf_values: PACF 값
             lags: 지연값 수
-            figsize: 그래프 크기
             
         Returns:
-            Matplotlib Figure 객체
+            Plotly Figure 객체
         """
-        fig, axes = plt.subplots(1, 2, figsize=figsize)
+        # 서브플롯 생성
+        fig = make_subplots(
+            rows=1, cols=2,
+            subplot_titles=(
+                '자기상관 함수 (Autocorrelation Function)',
+                '부분 자기상관 함수 (Partial Autocorrelation Function)'
+            )
+        )
         
-        # ACF 플롯
-        axes[0].stem(range(len(acf_values)), acf_values)
-        axes[0].set_title('자기상관 함수 (Autocorrelation Function)')
-        axes[0].set_xlabel('지연 (Lag)')
-        axes[0].set_ylabel('상관도 (Correlation)')
+        # x축 값 (lags)
+        x = list(range(len(acf_values)))
         
-        # 신뢰 구간 (95%)
+        # 신뢰 구간 계산 (95%)
         confidence = 1.96 / np.sqrt(len(acf_values))
-        axes[0].axhline(y=confidence, linestyle='--', color='gray')
-        axes[0].axhline(y=-confidence, linestyle='--', color='gray')
         
-        # PACF 플롯
-        axes[1].stem(range(len(pacf_values)), pacf_values)
-        axes[1].set_title('부분 자기상관 함수 (Partial Autocorrelation Function)')
-        axes[1].set_xlabel('지연 (Lag)')
-        axes[1].set_ylabel('상관도 (Correlation)')
+        # ACF 플롯 - stem 효과 (마커와 선 조합)
+        for i in range(len(acf_values)):
+            fig.add_trace(
+                go.Scatter(
+                    x=[i, i], 
+                    y=[0, acf_values[i]], 
+                    mode='lines',
+                    line=dict(color='blue', width=1),
+                    showlegend=False
+                ),
+                row=1, col=1
+            )
         
-        # 신뢰 구간 (95%)
-        confidence = 1.96 / np.sqrt(len(pacf_values))
-        axes[1].axhline(y=confidence, linestyle='--', color='gray')
-        axes[1].axhline(y=-confidence, linestyle='--', color='gray')
+        # ACF 마커
+        fig.add_trace(
+            go.Scatter(
+                x=x, 
+                y=acf_values, 
+                mode='markers',
+                marker=dict(color='blue', size=8),
+                name='ACF'
+            ),
+            row=1, col=1
+        )
         
-        plt.tight_layout()
+        # 신뢰 구간 추가
+        fig.add_trace(
+            go.Scatter(
+                x=[0, len(acf_values)-1],
+                y=[confidence, confidence],
+                mode='lines',
+                line=dict(color='gray', width=1, dash='dash'),
+                showlegend=False
+            ),
+            row=1, col=1
+        )
+        
+        fig.add_trace(
+            go.Scatter(
+                x=[0, len(acf_values)-1],
+                y=[-confidence, -confidence],
+                mode='lines',
+                line=dict(color='gray', width=1, dash='dash'),
+                showlegend=False
+            ),
+            row=1, col=1
+        )
+        
+        # PACF 플롯 - stem 효과
+        for i in range(len(pacf_values)):
+            fig.add_trace(
+                go.Scatter(
+                    x=[i, i], 
+                    y=[0, pacf_values[i]], 
+                    mode='lines',
+                    line=dict(color='blue', width=1),
+                    showlegend=False
+                ),
+                row=1, col=2
+            )
+        
+        # PACF 마커
+        fig.add_trace(
+            go.Scatter(
+                x=x, 
+                y=pacf_values, 
+                mode='markers',
+                marker=dict(color='blue', size=8),
+                name='PACF'
+            ),
+            row=1, col=2
+        )
+        
+        # PACF 신뢰 구간
+        fig.add_trace(
+            go.Scatter(
+                x=[0, len(pacf_values)-1],
+                y=[confidence, confidence],
+                mode='lines',
+                line=dict(color='gray', width=1, dash='dash'),
+                showlegend=False
+            ),
+            row=1, col=2
+        )
+        
+        fig.add_trace(
+            go.Scatter(
+                x=[0, len(pacf_values)-1],
+                y=[-confidence, -confidence],
+                mode='lines',
+                line=dict(color='gray', width=1, dash='dash'),
+                showlegend=False
+            ),
+            row=1, col=2
+        )
+        
+        # 레이아웃 업데이트
+        fig.update_layout(
+            height=400,
+            margin=dict(l=10, r=10, t=50, b=10),
+            showlegend=False,
+        )
+        
+        # x축 및 y축 레이블
+        fig.update_xaxes(title_text='지연 (Lag)', row=1, col=1)
+        fig.update_xaxes(title_text='지연 (Lag)', row=1, col=2)
+        fig.update_yaxes(title_text='상관도 (Correlation)', row=1, col=1)
+        fig.update_yaxes(title_text='상관도 (Correlation)', row=1, col=2)
         
         return fig
-    
-    def plot_forecast_comparison(self, 
-                               train: pd.Series,
-                               test: pd.Series,
-                               forecasts: Dict[str, np.ndarray],
-                               figsize: Tuple[int, int] = (12, 6)) -> Figure:
+
+    def plot_forecast_comparison(self,
+                            train: pd.Series,
+                            test: pd.Series,
+                            forecasts: Dict[str, np.ndarray],
+                            **kwargs) -> go.Figure:
         """
-        여러 모델의 예측 결과를 비교하여 시각화합니다.
+        여러 모델의 예측 결과를 비교하여 시각화합니다 (Plotly 버전).
         
         Args:
             train: 훈련 데이터
             test: 테스트 데이터
             forecasts: 모델별 예측값 딕셔너리
-            figsize: 그래프 크기
             
         Returns:
-            Matplotlib Figure 객체
+            Plotly Figure 객체
         """
-        fig, ax = plt.subplots(figsize=figsize)
+        # 그래프 생성
+        fig = go.Figure()
         
         # 훈련 데이터
-        ax.plot(train.index, train.values, label='Training Data', color='blue')
+        fig.add_trace(
+            go.Scatter(
+                x=train.index,
+                y=train.values,
+                mode='lines',
+                name='Training Data',
+                line=dict(color='blue', width=2)
+            )
+        )
         
         # 테스트 데이터
-        ax.plot(test.index, test.values, label='Actual Test Data', color='green')
+        fig.add_trace(
+            go.Scatter(
+                x=test.index,
+                y=test.values,
+                mode='lines',
+                name='Actual Test Data',
+                line=dict(color='green', width=2)
+            )
+        )
         
         # 각 모델의 예측
         colors = ['red', 'purple', 'orange', 'brown', 'pink', 'gray', 'olive']
         for i, (model_name, forecast) in enumerate(forecasts.items()):
-            ax.plot(test.index, forecast, 
-                  label=f'{model_name} Forecast', 
-                  color=colors[i % len(colors)], 
-                  linestyle='--')
+            fig.add_trace(
+                go.Scatter(
+                    x=test.index,
+                    y=forecast,
+                    mode='lines',
+                    name=f'{model_name} Forecast',
+                    line=dict(color=colors[i % len(colors)], width=2, dash='dash')
+                )
+            )
         
-        # 그래프 스타일 설정
-        ax.set_title('예측 비교 (Forecast Comparison)')
-        ax.set_xlabel('날짜 (Date)')
-        ax.set_ylabel('값 (Value)')
-        ax.legend()
+        # 레이아웃 업데이트
+        fig.update_layout(
+            title='예측 비교 (Forecast Comparison)',
+            xaxis_title='날짜 (Date)',
+            yaxis_title='값 (Value)',
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            margin=dict(l=10, r=10, t=50, b=10),
+            height=500,
+        )
         
-# x축 날짜 포맷 설정
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-        plt.xticks(rotation=45)
-        
-        plt.tight_layout()
+        # 날짜 형식 지정
+        fig.update_xaxes(
+            tickformat="%Y-%m-%d"
+        )
         
         return fig
-    
-    def plot_metrics_comparison(self, metrics: Dict[str, Dict[str, float]]) -> Figure:
+
+    def plot_metrics_comparison(self, metrics: Dict[str, Dict[str, float]]) -> go.Figure:
         """
-        여러 모델의 성능 지표를 비교하여 시각화합니다.
+        여러 모델의 성능 지표를 비교하여 시각화합니다 (Plotly 버전).
         
         Args:
             metrics: 모델별 성능 지표 딕셔너리
             
         Returns:
-            Matplotlib Figure 객체
+            Plotly Figure 객체
         """
         # 데이터 준비
         models = list(metrics.keys())
@@ -224,13 +362,14 @@ class TimeSeriesVisualizer(metaclass=Singleton):
         available_metrics = set.intersection(*[set(m.keys()) for m in metrics.values()])
         metric_names = [m for m in metric_names if m in available_metrics]
         
-        # 그래프 설정
-        fig, axes = plt.subplots(len(metric_names), 1, figsize=(12, 4 * len(metric_names)))
+        # 서브플롯 생성
+        fig = make_subplots(
+            rows=len(metric_names), 
+            cols=1,
+            subplot_titles=[f'{metric} Comparison' for metric in metric_names]
+        )
         
-        # 단일 지표인 경우 axes를 리스트로 변환
-        if len(metric_names) == 1:
-            axes = [axes]
-        
+        # 각 메트릭별 바 차트 생성
         for i, metric in enumerate(metric_names):
             values = [metrics[model][metric] for model in models]
             
@@ -251,44 +390,49 @@ class TimeSeriesVisualizer(metaclass=Singleton):
             sorted_values = [values[i] for i in sorted_idx]
             sorted_colors = [colors[i] for i in sorted_idx]
             
-            # 바 그래프
-            bars = axes[i].bar(sorted_models, sorted_values, color=sorted_colors)
-            axes[i].set_title(f'{metric} Comparison')
-            axes[i].set_ylabel(metric)
-            
-            # 값 표시
-            for j, (bar, v) in enumerate(zip(bars, sorted_values)):
-                text_color = 'black'
-                axes[i].text(
-                    bar.get_x() + bar.get_width() / 2,
-                    v + (max(sorted_values) * 0.02),
-                    f'{v:.4f}',
-                    ha='center',
-                    va='bottom',
-                    color=text_color,
-                    fontweight='bold'
-                )
+            # 바 차트 추가
+            fig.add_trace(
+                go.Bar(
+                    x=sorted_models,
+                    y=sorted_values,
+                    text=[f'{v:.4f}' for v in sorted_values],
+                    textposition='outside',
+                    marker_color=sorted_colors,
+                    name=metric
+                ),
+                row=i+1, col=1
+            )
         
-        plt.tight_layout()
+        # 레이아웃 업데이트
+        fig.update_layout(
+            height=300 * len(metric_names),
+            showlegend=False,
+            margin=dict(l=10, r=10, t=50, b=10)
+        )
+        
+        # y축 타이틀 업데이트
+        for i, metric in enumerate(metric_names):
+            fig.update_yaxes(title_text=metric, row=i+1, col=1)
         
         return fig
-    
-    def plot_residuals(self, 
-                      actual: pd.Series, 
-                      predicted: np.ndarray,
-                      title: str = "Residual Analysis",
-                      figsize: Tuple[int, int] = (12, 10)) -> Figure:
+
+    def plot_residuals(
+            self,
+            actual: pd.Series,
+            predicted: np.ndarray,
+            title: str = "Residual Analysis",
+            **kwargs
+        ) -> go.Figure:
         """
-        잔차 분석 플롯을 생성합니다.
+        잔차 분석 플롯을 생성합니다 (Plotly 버전).
         
         Args:
             actual: 실제 값
             predicted: 예측 값
             title: 그래프 제목
-            figsize: 그래프 크기
             
         Returns:
-            Matplotlib Figure 객체
+            Plotly Figure 객체
         """
         # 길이 맞춤
         min_len = min(len(actual), len(predicted))
@@ -298,47 +442,132 @@ class TimeSeriesVisualizer(metaclass=Singleton):
         # 잔차 계산
         residuals = actual_values - predicted_values
         
-        # 그래프 설정
-        fig, axes = plt.subplots(2, 2, figsize=figsize)
-        fig.suptitle(title, fontsize=16)
+        # 서브플롯 생성
+        fig = make_subplots(
+            rows=2, cols=2,
+            subplot_titles=(
+                '잔차 시계열 (Residuals Over Time)',
+                '잔차 분포 (Residual Distribution)',
+                '정규 Q-Q 플롯 (Normal Q-Q Plot)',
+                '잔차 vs 예측값 (Residuals vs Predicted)'
+            )
+        )
         
-        # 잔차 시계열 플롯
-        axes[0, 0].plot(actual.index[:min_len], residuals)
-        axes[0, 0].set_title('잔차 시계열 (Residuals Over Time)')
-        axes[0, 0].set_xlabel('날짜 (Date)')
-        axes[0, 0].set_ylabel('잔차 (Residual)')
-        axes[0, 0].axhline(y=0, linestyle='--', color='red')
-        axes[0, 0].tick_params(axis='x', rotation=90)
+        # 1. 잔차 시계열 플롯
+        fig.add_trace(
+            go.Scatter(
+                x=actual.index[:min_len],
+                y=residuals,
+                mode='lines',
+                name='Residuals'
+            ),
+            row=1, col=1
+        )
         
-        # 잔차 히스토그램
-        axes[0, 1].hist(residuals, bins=20, edgecolor='black')
-        axes[0, 1].set_title('잔차 분포 (Residual Distribution)')
-        axes[0, 1].set_xlabel('잔차 (Residual)')
-        axes[0, 1].set_ylabel('빈도 (Frequency)')
+        # 0 라인 추가
+        fig.add_trace(
+            go.Scatter(
+                x=[actual.index[0], actual.index[min_len-1]],
+                y=[0, 0],
+                mode='lines',
+                line=dict(color='red', width=1, dash='dash'),
+                showlegend=False
+            ),
+            row=1, col=1
+        )
         
-        # 잔차 QQ 플롯
-        from scipy import stats
-        stats.probplot(residuals, dist="norm", plot=axes[1, 0])
-        axes[1, 0].set_title('정규 Q-Q 플롯 (Normal Q-Q Plot)')
+        # 2. 잔차 히스토그램
+        fig.add_trace(
+            go.Histogram(
+                x=residuals,
+                nbinsx=20,
+                marker_line_color='black',
+                marker_line_width=1,
+                opacity=0.7,
+                name='Residual Distribution'
+            ),
+            row=1, col=2
+        )
         
-        # 잔차 vs 예측값
-        axes[1, 1].scatter(predicted_values, residuals)
-        axes[1, 1].set_title('잔차 vs 예측값 (Residuals vs Predicted)')
-        axes[1, 1].set_xlabel('예측값 (Predicted Values)')
-        axes[1, 1].set_ylabel('잔차 (Residuals)')
-        axes[1, 1].axhline(y=0, linestyle='--', color='red')
+        osm, osr = stats.probplot(residuals, dist="norm", fit=False)
         
-        plt.tight_layout()
-        plt.subplots_adjust(top=0.9)
+        fig.add_trace(
+            go.Scatter(
+                x=osm,
+                y=osr,
+                mode='markers',
+                marker=dict(color='blue', size=6),
+                name='Q-Q Plot'
+            ),
+            row=2, col=1
+        )
+        
+        # 이론적인 정규분포 라인
+        z = np.polyfit(osm, osr, 1)
+        p = np.poly1d(z)
+        fig.add_trace(
+            go.Scatter(
+                x=osm,
+                y=p(osm),
+                mode='lines',
+                line=dict(color='red', width=1),
+                showlegend=False
+            ),
+            row=2, col=1
+        )
+        
+        # 4. 잔차 vs 예측값
+        fig.add_trace(
+            go.Scatter(
+                x=predicted_values,
+                y=residuals,
+                mode='markers',
+                marker=dict(color='blue', size=6),
+                name='Residuals vs Predicted'
+            ),
+            row=2, col=2
+        )
+        
+        # 0 라인 추가
+        fig.add_trace(
+            go.Scatter(
+                x=[min(predicted_values), max(predicted_values)],
+                y=[0, 0],
+                mode='lines',
+                line=dict(color='red', width=1, dash='dash'),
+                showlegend=False
+            ),
+            row=2, col=2
+        )
+        
+        # 레이아웃 업데이트
+        fig.update_layout(
+            title=title,
+            height=800,
+            showlegend=False,
+            margin=dict(l=10, r=10, t=50, b=10)
+        )
+        
+        # 축 레이블 업데이트
+        fig.update_xaxes(title_text='날짜 (Date)', row=1, col=1)
+        fig.update_xaxes(title_text='잔차 (Residual)', row=1, col=2)
+        fig.update_xaxes(title_text='이론적 분위수 (Theoretical Quantiles)', row=2, col=1)
+        fig.update_xaxes(title_text='예측값 (Predicted Values)', row=2, col=2)
+        
+        fig.update_yaxes(title_text='잔차 (Residual)', row=1, col=1)
+        fig.update_yaxes(title_text='빈도 (Frequency)', row=1, col=2)
+        fig.update_yaxes(title_text='정렬된 값 (Ordered Values)', row=2, col=1)
+        fig.update_yaxes(title_text='잔차 (Residuals)', row=2, col=2)
         
         return fig
-    
-    def plot_feature_importance(self, 
-                              features: pd.DataFrame, 
-                              target: pd.Series,
-                              top_n: int = 10) -> Figure:
+
+    def plot_feature_importance(self,
+                            features: pd.DataFrame,
+                            target: pd.Series,
+                            top_n: int = 10,
+                            **kwargs) -> go.Figure:
         """
-        특성 중요도를 시각화합니다.
+        특성 중요도를 시각화합니다 (Plotly 버전).
         
         Args:
             features: 특성 데이터프레임
@@ -346,7 +575,7 @@ class TimeSeriesVisualizer(metaclass=Singleton):
             top_n: 표시할 상위 특성 수
             
         Returns:
-            Matplotlib Figure 객체
+            Plotly Figure 객체
         """
         from sklearn.ensemble import RandomForestRegressor
         
@@ -369,18 +598,33 @@ class TimeSeriesVisualizer(metaclass=Singleton):
         top_features = [numeric_features[i] for i in top_indices]
         top_importance = importance[top_indices]
         
-        # 그래프 설정
-        fig, ax = plt.subplots(figsize=(10, 8))
+        # 시각화
+        fig = go.Figure()
         
         # 수평 막대 그래프
-        y_pos = np.arange(len(top_features))
-        ax.barh(y_pos, top_importance, align='center')
-        ax.set_yticks(y_pos)
-        ax.set_yticklabels(top_features)
-        ax.invert_yaxis()
-        ax.set_xlabel('특성 중요도 (Feature Importance)')
-        ax.set_title('상위 특성 중요도 (Top Feature Importance)')
+        fig.add_trace(
+            go.Bar(
+                y=top_features,
+                x=top_importance,
+                orientation='h',
+                marker=dict(
+                    color='rgba(50, 171, 96, 0.7)',
+                    line=dict(color='rgba(50, 171, 96, 1.0)', width=1)
+                )
+            )
+        )
         
-        plt.tight_layout()
+        # 레이아웃 업데이트
+        fig.update_layout(
+            title='상위 특성 중요도 (Top Feature Importance)',
+            xaxis_title='특성 중요도 (Feature Importance)',
+            yaxis_title='특성 (Feature)',
+            height=500,
+            margin=dict(l=10, r=10, t=50, b=10)
+        )
+        
+        # y축 역순 정렬 (중요도 높은 특성이 상단에 표시)
+        fig.update_layout(yaxis={'categoryorder': 'total ascending'})
         
         return fig
+    

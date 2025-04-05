@@ -423,10 +423,10 @@ def main():
             station_text = f"{st.session_state.selected_station} " if st.session_state.selected_station else "Seoul City Overall "
             fig = visualizer.plot_timeseries(
                 st.session_state.series,
-                title=f"{station_text}{st.session_state.selected_target} Time Series Data",
+                title=f"{station_text}{st.session_state.selected_target} 시계열 데이터",
                 ylabel=st.session_state.selected_target
             )
-            st.pyplot(fig)
+            st.plotly_chart(fig, use_container_width=True, theme="streamlit")
         
         with tab2:
             # 시계열 분해
@@ -451,7 +451,7 @@ def main():
                 
                 # 분해 결과 시각화
                 decomp_fig = visualizer.plot_decomposition(st.session_state.decomposition)
-                st.pyplot(decomp_fig)
+                st.plotly_chart(decomp_fig, use_container_width=True, theme="streamlit")
             except Exception as e:
                 st.error(f"시계열 분해 중 오류 발생: {str(e)}")
         
@@ -487,7 +487,7 @@ def main():
                 st.session_state.acf_values, st.session_state.pacf_values = data_processor.get_acf_pacf(st.session_state.series)
                 
                 acf_pacf_fig = visualizer.plot_acf_pacf(st.session_state.acf_values, st.session_state.pacf_values)
-                st.pyplot(acf_pacf_fig)
+                st.plotly_chart(acf_pacf_fig, use_container_width=True, theme="streamlit")
             except Exception as e:
                 st.error(f"정상성 검정 중 오류 발생: {str(e)}")
         
@@ -537,12 +537,12 @@ def main():
                     st.session_state.test, 
                     st.session_state.forecasts
                 )
-                st.pyplot(comparison_fig)
+                st.plotly_chart(comparison_fig, use_container_width=True, theme="streamlit")
                 
                 # 메트릭 비교 시각화
                 st.subheader("📈 모델 성능 비교")
                 metrics_fig = visualizer.plot_metrics_comparison(st.session_state.metrics)
-                st.pyplot(metrics_fig)
+                st.plotly_chart(metrics_fig, use_container_width=True, theme="streamlit")
                 
                 # 메트릭 표 표시
                 st.subheader("📋 모델 성능 메트릭")
@@ -562,7 +562,7 @@ def main():
                     
                     # 잔차 분석
                     residuals_fig = visualizer.plot_residuals(st.session_state.test, best_forecast)
-                    st.pyplot(residuals_fig)
+                    st.plotly_chart(residuals_fig, use_container_width=True, theme="streamlit")
         with tab5:
             # LLM 분석 탭
             st.subheader("🤖 LLM 시계열 데이터 분석")
