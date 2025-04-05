@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import matplotlib.dates as mdates
 from matplotlib.figure import Figure
-from matplotlib.axes import Axes
 
 from utils.singleton import Singleton
 
@@ -29,8 +28,7 @@ class TimeSeriesVisualizer(metaclass=Singleton):
         plt.rcParams['font.size'] = 12
         plt.rcParams['figure.figsize'] = (12, 6)
         
-        # 한글 폰트 설정
-        # plt.rcParams['font.family'] = 'NanumGothic'
+        # 한글 폰트 관련 설정 제거 (영어로 대체)
         plt.rcParams['axes.unicode_minus'] = False
     
     def plot_timeseries(self, 
@@ -196,7 +194,7 @@ class TimeSeriesVisualizer(metaclass=Singleton):
         ax.set_ylabel('Value')
         ax.legend()
         
-        # x축 날짜 포맷 설정
+# x축 날짜 포맷 설정
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
         plt.xticks(rotation=45)
         
