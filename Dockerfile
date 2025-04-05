@@ -54,4 +54,4 @@ COPY . .
 EXPOSE 8777
 
 # 실행 명령어
-CMD ["streamlit", "run", "app.py", "--server.port", "8777", "--server.address", "0.0.0.0"]
+CMD ["streamlit", "run", "app.py", "--server.port", "8777", "--server.address", "0.0.0.0", "--server.fileWatcherType", "none"]

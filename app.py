@@ -16,6 +16,12 @@ from utils.visualizer import TimeSeriesVisualizer
 from utils.llm_connector import LLMConnector
 from prompts.time_series_analysis_prompt import TIME_SERIES_ANALYSIS_PROMPT
 
+import os
+# GPU 사용 비활성화 (CPU 모드만 사용)
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+# TensorFlow 로그 레벨 조정
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+
 # 경고 메시지 무시
 warnings.filterwarnings('ignore')
 
