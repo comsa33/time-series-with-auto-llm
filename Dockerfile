@@ -9,17 +9,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app 
 
-# 시스템 패키지 설치
+# 시스템 패키지 설치 (한글 폰트 포함)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     git \
-    fonts-nanum \         # 나눔 폰트 추가
-    fonts-noto-cjk \      # CJK 폰트 추가 (한중일 문자 지원)
-    language-pack-ko \    # 한국어 언어팩 추가
+    fonts-nanum \
+    fonts-noto-cjk \
+    language-pack-ko \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# 폰트 캐시 갱신
 RUN fc-cache -fv
 
 # Poetry 설치
