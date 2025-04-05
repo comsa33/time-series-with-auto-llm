@@ -94,7 +94,7 @@ def get_model_factory():
         return None
 
 # 데이터 불러오기 함수
-@st.cache_data
+@st.cache_data(ttl=3600)
 def load_data(file_path=None, start_date=None, end_date=None):
     """
     CSV 파일에서 데이터를 불러오거나, 파일이 없는 경우 API를 통해 데이터를 가져옵니다.
@@ -295,22 +295,48 @@ def main():
     
     # 데이터 로드
     st.sidebar.subheader("서울시 대기질 데이터 로드", help="서울시 IoT 대기질 데이터 API를 통해 데이터를 실시간으로 가져옵니다.")
-    
+
+
     # 날짜 범위 선택
-    today = datetime.now()
-    default_end_date = today.strftime("%Y-%m-%d")
-    default_start_date = (today - timedelta(days=30)).strftime("%Y-%m-%d")
-    
-    start_date = st.sidebar.date_input(
-        "Start Date",
-        datetime.strptime(default_start_date, "%Y-%m-%d")
-    )
-    
-    end_date = st.sidebar.date_input(
-        "End Date",
-        datetime.strptime(default_end_date, "%Y-%m-%d")
-    )
-    
+    today = datetime.now().date()  # datetime.date 객체로 변환
+    default_end_date = today
+    default_start_date = today - timedelta(days=30)
+
+    st.sidebar.markdown("##### 📅 분석 기간 선택", help="시계열 분석을 위한 데이터 기간을 선택하세요. (최대 30일)")
+
+    date_col1, date_col2 = st.sidebar.columns(2)
+
+    with date_col1:
+        start_date = st.date_input(
+            "시작 날짜",
+            default_start_date
+        )
+        
+    with date_col2:
+        # 시작일 기준으로 최대 종료일 계산 (30일 이내)
+        max_end_date = start_date + timedelta(days=30)
+        if today < max_end_date:
+            max_end_date = today
+            
+        end_date = st.date_input(
+            "종료 날짜",
+            min(default_end_date, max_end_date),
+            min_value=start_date,
+            max_value=max_end_date
+        )
+
+    # 선택된 날짜 범위 일수 계산
+    date_range_days = (end_date - start_date).days
+
+    # 기간 표시 정보 및 시각화
+    progress_value = min(date_range_days / 30, 1.0)
+    st.sidebar.progress(progress_value)
+    st.sidebar.text(f"선택된 기간: {date_range_days + 1}일 / 최대 30일")
+
+    if date_range_days > 25:
+        st.sidebar.warning("데이터 양이 많을수록 분석 시간이 길어질 수 있습니다.")
+
+    # 데이터 가져오기 버튼
     if st.sidebar.button("데이터 가져오기"):
         with st.spinner("서울시 API에서 데이터를 가져오는 중..."):
             df = load_data(
