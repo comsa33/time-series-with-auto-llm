@@ -14,8 +14,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     git \
+    fonts-nanum \         # 나눔 폰트 추가
+    fonts-noto-cjk \      # CJK 폰트 추가 (한중일 문자 지원)
+    language-pack-ko \    # 한국어 언어팩 추가
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+RUN fc-cache -fv
 
 # Poetry 설치
 RUN pip install poetry==2.1.1

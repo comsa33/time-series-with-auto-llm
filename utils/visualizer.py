@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import matplotlib.dates as mdates
 from matplotlib.figure import Figure
+from matplotlib import font_manager, rc
 
 from utils.singleton import Singleton
 
@@ -28,7 +29,10 @@ class TimeSeriesVisualizer(metaclass=Singleton):
         plt.rcParams['font.size'] = 12
         plt.rcParams['figure.figsize'] = (12, 6)
         
-        # 한글 폰트 관련 설정 제거 (영어로 대체)
+        # 한글 폰트 설정
+        font_path = '/usr/share/fonts/truetype/nanum/NanumGothic.ttf'  # 나눔고딕 폰트 경로
+        font_name = font_manager.FontProperties(fname=font_path).get_name()
+        rc('font', family=font_name)
         plt.rcParams['axes.unicode_minus'] = False
     
     def plot_timeseries(self, 
