@@ -3,19 +3,31 @@
 """
 import os
 import warnings
+import traceback
 from datetime import datetime, timedelta
 
 import streamlit as st
 import pandas as pd
 import numpy as np
+from dotenv import load_dotenv
 
 from config.settings import app_config
 from utils.data_reader import get_seoul_air_quality
 from utils.data_processor import DataProcessor
 from utils.visualizer import TimeSeriesVisualizer
+from utils.llm_connector import LLMConnector
+from prompts.time_series_analysis_prompt import TIME_SERIES_ANALYSIS_PROMPT
+
+# 환경 변수 로드
+load_dotenv()
 
 # 경고 메시지 무시
 warnings.filterwarnings('ignore')
+
+
+OLLAMA_SERVER = os.getenv("OLLAMA_SERVER")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL")
+
 
 # 페이지 설정
 st.set_page_config(
@@ -24,6 +36,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
 
 # 객체 초기화
 data_processor = DataProcessor()
@@ -127,20 +140,20 @@ def render_header():
     # 확장 가능한 앱 소개
     with st.expander("📌 App Introduction and Usage"):
         st.markdown("""
-        ### App Introduction
-        This app analyzes and visualizes time series data from Seoul City's air quality data.
-        
-        ### Main Features
-        1. **Data Exploration**: Basic statistics and visualization of Seoul's air quality data
-        2. **Time Series Decomposition**: Trend, seasonality, and irregularity analysis
-        3. **Model Comparison**: Various prediction models including ARIMA/SARIMA, Exponential Smoothing, Prophet, LSTM, etc.
-        4. **Prediction Performance Evaluation**: Various metrics-based evaluation (RMSE, MAE, R^2, etc.)
-        
-        ### How to Use
-        1. Select data upload or API collection options in the sidebar
-        2. Choose the measurement station and variable (PM10, PM25, etc.) to analyze
-        3. Set time series analysis options and run model training
-        4. Compare and analyze prediction results of various models in the results tab
+        ### 📌 앱 소개
+        이 앱은 서울시 대기질 데이터를 활용하여 시계열 데이터를 분석하고 시각화하는 도구입니다.
+
+        ### 🌟 주요 기능
+        1. **데이터 탐색**: 서울시 대기질 데이터의 기본 통계 및 시각화 제공
+        2. **시계열 분해**: 추세(Trend), 계절성(Seasonality), 불규칙성(Irregularity) 분석
+        3. **모델 비교**: ARIMA/SARIMA, 지수평활법, Prophet, LSTM 등 다양한 예측 모델 지원
+        4. **예측 성능 평가**: RMSE, MAE, R² 등 다양한 메트릭 기반 평가
+
+        ### 🛠️ 사용 방법
+        1. 사이드바에서 데이터 업로드 또는 API 수집 옵션 선택
+        2. 분석할 측정소와 변수(PM10, PM25 등) 선택
+        3. 시계열 분석 옵션 설정 후 모델 학습 실행
+        4. 결과 탭에서 다양한 모델의 예측 결과 비교 및 분석
         """)
 
 # 데이터 소스 변경 콜백
@@ -397,7 +410,13 @@ def main():
         update_series()
         
         # 시계열 분석 탭
-        tab1, tab2, tab3, tab4 = st.tabs(["Time Series Visualization", "Time Series Decomposition", "Stationarity & ACF/PACF", "Model Training & Prediction"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+            "시계열 시각화", 
+            "시계열 분해", 
+            "정상성 & ACF/PACF", 
+            "모델 학습 및 예측",
+            "LLM 분석"
+        ])
         
         with tab1:
             # 시계열 데이터 시각화
@@ -543,23 +562,23 @@ def main():
                 st.subheader("🔍 Model Interpretation & Insights")
                 
                 st.markdown(f"""
-                ### Time Series Analysis Results
+                ### 시계열 분석 결과
                 
-                1. **Data Characteristics**:
-                   - The selected variable ({st.session_state.selected_target}) shows distinct daily and weekly patterns.
-                   - As seen in the decomposition results, there is a seasonality with a {st.session_state.period}-hour period.
+                1. **데이터 특성**:
+                   - 선택한 변수 ({st.session_state.selected_target})는 뚜렷한 일별 및 주별 패턴을 보입니다.
+                   - 분해 결과에서 확인할 수 있듯이, {st.session_state.period}시간 주기의 계절성이 존재합니다.
                 
-                2. **Model Performance Comparison**:
-                   - The {st.session_state.best_model} model showed the best performance based on RMSE.
-                   - Model characteristics:
-                     - ARIMA: Statistical model utilizing autocorrelation in time series data
-                     - Exponential Smoothing: Method giving higher weights to recent observations
-                     - Prophet: Facebook's time series model considering trend, seasonality, and holiday effects
-                     - LSTM: Deep learning-based time series prediction model using recurrent neural networks
+                2. **모델 성능 비교**:
+                   - {st.session_state.best_model} 모델이 RMSE 기준으로 가장 우수한 성능을 보였습니다.
+                   - 모델 특성:
+                     - ARIMA: 시계열 데이터의 자기상관성을 활용한 통계적 모델
+                     - 지수평활법: 최근 관측값에 더 높은 가중치를 부여하는 방법
+                     - Prophet: 트렌드, 계절성, 공휴일 효과를 고려한 Facebook의 시계열 모델
+                     - LSTM: 순환 신경망을 활용한 딥러닝 기반 시계열 예측 모델
                 
-                3. **Applicability**:
-                   - This prediction model can be used to develop a Seoul air quality forecasting system.
-                   - By predicting times when fine dust concentration is expected to be high, it can help protect citizens' health.
+                3. **적용 가능성**:
+                   - 이 예측 모델은 서울시 대기질 예보 시스템 개발에 활용될 수 있습니다.
+                   - 미세먼지 농도가 높아질 것으로 예상되는 시점을 예측하여 시민 건강 보호에 기여할 수 있습니다.
                 """)
                 
                 # 선택한 최적 모델 상세 분석
@@ -572,6 +591,180 @@ def main():
                     # 잔차 분석
                     residuals_fig = visualizer.plot_residuals(st.session_state.test, best_forecast)
                     st.pyplot(residuals_fig)
+        with tab5:
+            # LLM 분석 탭
+            st.subheader("🤖 LLM 시계열 데이터 분석")
+            
+            with st.expander("📊 LLM 분석 설정", expanded=True):
+                st.info("Ollama 서버를 통해 Gemma3:27b 모델로 시계열 분석 결과를 자동으로 분석합니다.")
+            
+            def check_analysis_ready():
+                """
+                LLM 분석을 위한 데이터와 모델이 준비되었는지 확인합니다.
+                """
+                # 모델 예측 결과와 평가 지표를 우선 확인
+                if not hasattr(st.session_state, 'forecasts') or not st.session_state.forecasts:
+                    return False, "모델 예측 결과가 없습니다. 먼저 '모델 학습 및 예측' 탭에서 모델 학습을 완료해주세요."
+                    
+                if not hasattr(st.session_state, 'metrics') or not st.session_state.metrics:
+                    return False, "모델 평가 지표가 없습니다. 먼저 '모델 학습 및 예측' 탭에서 모델 학습을 완료해주세요."
+                    
+                if not hasattr(st.session_state, 'best_model') or st.session_state.best_model is None:
+                    return False, "최적 모델 정보가 없습니다. 먼저 '모델 학습 및 예측' 탭에서 모델 학습을 완료해주세요."
+                
+                # 시계열 데이터는 필수 확인
+                if not hasattr(st.session_state, 'series') or st.session_state.series is None:
+                    return False, "시계열 데이터가 준비되지 않았습니다."
+                
+                # train/test 데이터는 경고만 출력하고 진행
+                if not hasattr(st.session_state, 'train') or st.session_state.train is None or not hasattr(st.session_state, 'test') or st.session_state.test is None:
+                    st.warning("학습/테스트 데이터가 접근 불가능하지만, 모델 결과가 있으므로 분석을 진행합니다.")
+                
+                return True, "분석 준비 완료"
+            
+            # LLM 분석 실행 버튼
+            if st.button("LLM 분석 시작", type="primary"):
+                
+                # 데이터 및 모델 학습 상태 확인
+                is_ready, message = check_analysis_ready()
+                
+                if not is_ready:
+                    st.warning(message)
+                else:
+                    with st.spinner("LLM을 통해 시계열 분석 결과를 분석 중입니다..."):
+                        try:
+                            # LLM 연결 객체 초기화
+                            from utils.llm_connector import LLMConnector
+                            from prompts.time_series_analysis_prompt import TIME_SERIES_ANALYSIS_PROMPT
+                            
+                            llm_connector = LLMConnector(base_url=OLLAMA_SERVER, model=OLLAMA_MODEL)
+                            
+                            # 데이터 정보 수집 - 안전하게 값 추출
+                            data_info = {
+                                "target_variable": st.session_state.selected_target,
+                                "station": st.session_state.selected_station if hasattr(st.session_state, 'selected_station') else None,
+                                "seasonality_period": st.session_state.period if hasattr(st.session_state, 'period') else None,
+                                "data_range": {
+                                    "total_points": len(st.session_state.series),
+                                },
+                                "date_range": {
+                                    "start": str(st.session_state.series.index.min()),
+                                    "end": str(st.session_state.series.index.max())
+                                },
+                                "value_stats": {
+                                    "min": float(st.session_state.series.min()),
+                                    "max": float(st.session_state.series.max()),
+                                    "mean": float(st.session_state.series.mean()),
+                                    "std": float(st.session_state.series.std())
+                                }
+                            }
+
+                            # 훈련/테스트 데이터가 있는 경우만 추가
+                            if hasattr(st.session_state, 'train') and st.session_state.train is not None:
+                                data_info["data_range"]["train_points"] = len(st.session_state.train)
+
+                            if hasattr(st.session_state, 'test') and st.session_state.test is not None:
+                                data_info["data_range"]["test_points"] = len(st.session_state.test)
+                            
+                            # 정상성 정보 추가 (있는 경우만)
+                            if (hasattr(st.session_state, 'stationarity_result') 
+                                and st.session_state.stationarity_result is not None):
+                                try:
+                                    data_info["stationarity"] = {
+                                        "is_stationary": bool(st.session_state.stationarity_result["is_stationary"]),
+                                        "p_value": float(st.session_state.stationarity_result["p_value"]),
+                                        "test_statistic": float(st.session_state.stationarity_result["test_statistic"])
+                                    }
+                                except (KeyError, TypeError):
+                                    # 정상성 정보에 필요한 키가 없는 경우 무시
+                                    pass
+                            
+                            # 분해 정보 추가 (있는 경우만, 요약 정보만)
+                            if (hasattr(st.session_state, 'decomposition') 
+                                and st.session_state.decomposition is not None):
+                                try:
+                                    decomp_info = {}
+                                    for comp_name, comp_data in st.session_state.decomposition.items():
+                                        if comp_name != 'observed' and comp_data is not None:  # 원본 데이터는 제외
+                                            clean_data = comp_data.dropna()
+                                            if not clean_data.empty:
+                                                decomp_info[comp_name] = {
+                                                    "min": float(clean_data.min()),
+                                                    "max": float(clean_data.max()),
+                                                    "mean": float(clean_data.mean())
+                                                }
+                                    
+                                    if decomp_info:  # 비어있지 않은 경우만 추가
+                                        data_info["decomposition"] = decomp_info
+                                except Exception as e:
+                                    st.warning(f"분해 정보 처리 중 오류 발생 (무시됨): {e}")
+                            
+                            # 모델 결과 정보 수집
+                            model_results = {
+                                "best_model": st.session_state.best_model,
+                                "models": {}
+                            }
+                            
+                            # 각 모델의 메트릭 정보 추가
+                            for model_name, metrics in st.session_state.metrics.items():
+                                model_results["models"][model_name] = {
+                                    "metrics": {}
+                                }
+                                for metric_name, metric_value in metrics.items():
+                                    # NaN 값 처리
+                                    if pd.isna(metric_value):
+                                        model_results["models"][model_name]["metrics"][metric_name] = None
+                                    else:
+                                        model_results["models"][model_name]["metrics"][metric_name] = float(metric_value)
+                                
+                                # 예측값이 있는 경우만 통계 추가
+                                if model_name in st.session_state.forecasts:
+                                    forecast = st.session_state.forecasts[model_name]
+                                    if forecast is not None and len(forecast) > 0:
+                                        model_results["models"][model_name]["forecast_stats"] = {
+                                            "min": float(np.min(forecast)),
+                                            "max": float(np.max(forecast)),
+                                            "mean": float(np.mean(forecast)),
+                                            "std": float(np.std(forecast))
+                                        }
+                            
+                            # LLM 분석 요청
+                            analysis_result = llm_connector.analyze_time_series(
+                                data_info,
+                                model_results,
+                                TIME_SERIES_ANALYSIS_PROMPT
+                            )
+                            
+                            # 분석 결과 표시
+                            st.markdown(analysis_result)
+                            
+                            # 세션 상태에 분석 결과 저장
+                            st.session_state.llm_analysis = analysis_result
+                            
+                            # 분석 결과 다운로드 버튼 제공
+                            st.download_button(
+                                label="분석 결과 다운로드 (Markdown)",
+                                data=analysis_result,
+                                file_name="time_series_analysis_report.md",
+                                mime="text/markdown"
+                            )
+                            
+                        except Exception as e:
+                            st.error(f"LLM 분석 중 오류 발생: {str(e)}")
+                            import traceback
+                            st.error(traceback.format_exc())
+
+            # 이전에 분석한 결과가 있으면 표시
+            elif hasattr(st.session_state, 'llm_analysis') and st.session_state.llm_analysis:
+                st.markdown(st.session_state.llm_analysis)
+                
+                # 다운로드 버튼
+                st.download_button(
+                    label="분석 결과 다운로드 (Markdown)",
+                    data=st.session_state.llm_analysis,
+                    file_name="time_series_analysis_report.md",
+                    mime="text/markdown"
+                )
     else:
         st.info("Please upload data or get data from API to start analysis.")
 

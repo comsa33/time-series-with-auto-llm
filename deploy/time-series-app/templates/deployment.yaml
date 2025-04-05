@@ -35,6 +35,10 @@ spec:
           value: "http://openAPI.seoul.go.kr:8088"
         - name: SEOUL_AIR_QUALITY_SERVICE
           value: "TimeAverageAirQuality"
+        - name: OLLAMA_SERVER
+          value: "http://125.130.4.43:11434"
+        - name: OLLAMA_MODEL
+          value: "gemma3:27b"
       volumes:
       - name: data-volume
         persistentVolumeClaim:
