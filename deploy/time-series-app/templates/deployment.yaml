@@ -28,6 +28,13 @@ spec:
         volumeMounts:
         - name: data-volume
           mountPath: /app/data
+        resources:
+          limits:
+            cpu: "4"
+            memory: "8Gi"
+          requests:
+            cpu: "2"
+            memory: "4Gi"
         env:
         - name: ENV
           value: "production"
@@ -58,10 +65,4 @@ spec:
       - name: data-volume
         persistentVolumeClaim:
           claimName: time-series-app-pvc
-      resources:
-          limits:
-            cpu: "4"
-            memory: "8Gi"
-          requests:
-            cpu: "2"
-            memory: "4Gi"
+        
