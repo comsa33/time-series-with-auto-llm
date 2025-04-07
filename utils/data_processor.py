@@ -7,7 +7,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from statsmodels.tsa.seasonal import seasonal_decompose
-from statsmodels.tsa.stattools import adfuller, acf, pacf
+from statsmodels.tsa.stattools import adfuller
 
 from utils.singleton import Singleton
 from config.settings import app_config

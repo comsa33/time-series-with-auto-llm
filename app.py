@@ -213,30 +213,67 @@ def update_series():
 
 
 # 모델 학습 결과를 캐싱하는 함수 추가
+# ARIMA 모델용 캐싱 함수
 @st.cache_data(ttl=3600)
-def cached_train_arima(train_data_key, test_data_key, seasonal, m):
-    """실제 데이터 대신 데이터 키를 사용하여 캐싱 (메모리 효율성)"""
+def cached_train_arima(train_data_key, test_data_key, seasonal, m, **kwargs):
+    """ARIMA 모델 학습 결과를 캐싱합니다."""
     try:
         model_factory = get_model_factory()
         if model_factory is None:
             return None, None
         
         model = model_factory.get_model('arima')
+        # 모든 추가 파라미터를 model.fit_predict_evaluate로 전달
         forecast, metrics = model.fit_predict_evaluate(
             st.session_state.train, 
             st.session_state.test,
             seasonal=seasonal,
             m=m,
-            # 파라미터 최적화 (탐색 범위 제한)
-            max_p=2, max_q=2,
-            max_P=1, max_Q=1,
-            max_d=1, max_D=1,
-            stepwise=True,
-            n_jobs=1  # 병렬 처리 비활성화
+            **kwargs  # 여기서 arima_params의 내용이 전달됨
         )
         return forecast, metrics
     except Exception as e:
         st.error(f"ARIMA 모델 학습 오류: {e}")
+        return None, None
+
+# Prophet 모델용 캐싱 함수
+@st.cache_data(ttl=3600)
+def cached_train_prophet(train_data_key, test_data_key, **kwargs):
+    """Prophet 모델 학습 결과를 캐싱합니다."""
+    try:
+        model_factory = get_model_factory()
+        if model_factory is None:
+            return None, None
+        
+        model = model_factory.get_model('prophet')
+        forecast, metrics = model.fit_predict_evaluate(
+            st.session_state.train, 
+            st.session_state.test,
+            **kwargs  # prophet_params의 내용이 여기로 전달됨
+        )
+        return forecast, metrics
+    except Exception as e:
+        st.error(f"Prophet 모델 학습 오류: {e}")
+        return None, None
+
+# LSTM 모델용 캐싱 함수
+@st.cache_data(ttl=3600)
+def cached_train_lstm(train_data_key, test_data_key, **kwargs):
+    """LSTM 모델 학습 결과를 캐싱합니다."""
+    try:
+        model_factory = get_model_factory()
+        if model_factory is None:
+            return None, None
+        
+        model = model_factory.get_model('lstm')
+        forecast, metrics = model.fit_predict_evaluate(
+            st.session_state.train, 
+            st.session_state.test,
+            **kwargs  # 모든 lstm_params가 여기로 전달됨
+        )
+        return forecast, metrics
+    except Exception as e:
+        st.error(f"LSTM 모델 학습 오류: {e}")
         return None, None
 
 @st.cache_data(ttl=3600)
@@ -257,50 +294,18 @@ def cached_train_exp_smoothing(train_data_key, test_data_key, seasonal_periods):
         st.error(f"지수평활법 모델 학습 오류: {e}")
         return None, None
 
-@st.cache_data(ttl=3600)
-def cached_train_prophet(train_data_key, test_data_key):
-    try:
-        model_factory = get_model_factory()
-        if model_factory is None:
-            return None, None
-        
-        model = model_factory.get_model('prophet')
-        forecast, metrics = model.fit_predict_evaluate(
-            st.session_state.train, 
-            st.session_state.test,
-            daily_seasonality=True,
-            weekly_seasonality=True
-        )
-        return forecast, metrics
-    except Exception as e:
-        st.error(f"Prophet 모델 학습 오류: {e}")
-        return None, None
-
-@st.cache_data(ttl=3600)
-def cached_train_lstm(train_data_key, test_data_key, n_steps):
-    try:
-        model_factory = get_model_factory()
-        if model_factory is None:
-            return None, None
-        
-        model = model_factory.get_model('lstm')
-        forecast, metrics = model.fit_predict_evaluate(
-            st.session_state.train, 
-            st.session_state.test,
-            n_steps=n_steps,
-            lstm_units=[50],  # 단순화된 모델 구조
-            dropout_rate=0.2,
-            epochs=50,  # 에폭 수 감소
-            batch_size=32,
-            validation_split=0.1
-        )
-        return forecast, metrics
-    except Exception as e:
-        st.error(f"LSTM 모델 학습 오류: {e}")
-        return None, None
+def safe_len(obj, default=10):
+    """None이 아닌 객체의 길이를 안전하게 반환, None이면 기본값 반환"""
+    if obj is not None:
+        return len(obj)
+    return default
 
 def train_models():
     """모델 학습 및 예측 함수 - 캐싱 활용"""
+    # 현재 복잡도 설정 확인
+    complexity = st.session_state.get('complexity', '간단 (빠름, 저메모리)')
+    
+
     # 훈련/테스트 분할
     st.session_state.train, st.session_state.test = cached_train_test_split(
         st.session_state.series, 
@@ -310,6 +315,54 @@ def train_models():
     # 데이터 키 생성 (캐싱용)
     train_data_key = hash(tuple(st.session_state.train.values.tolist()))
     test_data_key = hash(tuple(st.session_state.test.values.tolist()))
+
+    # 복잡도별 파라미터 설정
+    if complexity == '간단 (빠름, 저메모리)':
+        arima_params = {
+            'max_p': 1, 'max_q': 1, 'max_P': 0, 'max_Q': 0,
+            'stepwise': True, 'n_jobs': 1
+        }
+        lstm_params = {
+            'n_steps': min(24, safe_len(st.session_state.train, 100) // 20),
+            'lstm_units': [32],
+            'epochs': 30
+        }
+        prophet_params = {
+            'daily_seasonality': False,
+            'weekly_seasonality': True,
+            'changepoint_prior_scale': 0.01
+        }
+    elif complexity == '중간':
+        arima_params = {
+            'max_p': 2, 'max_q': 2, 'max_P': 1, 'max_Q': 1,
+            'stepwise': True, 'n_jobs': 1
+        }
+        lstm_params = {
+            'n_steps': min(48, safe_len(st.session_state.train, 100) // 10),
+            'lstm_units': [50],
+            'epochs': 50
+        }
+        prophet_params = {
+            'daily_seasonality': True,
+            'weekly_seasonality': True,
+            'changepoint_prior_scale': 0.05
+        }
+    else:  # 복잡 (정확도 높음, 고메모리)
+        arima_params = {
+            'max_p': 5, 'max_q': 5, 'max_P': 2, 'max_Q': 2,
+            'stepwise': True, 'n_jobs': 1
+        }
+        lstm_params = {
+            'n_steps': min(72, safe_len(st.session_state.train, 100) // 8),
+            'lstm_units': [50, 50],
+            'epochs': 100
+        }
+        prophet_params = {
+            'daily_seasonality': True,
+            'weekly_seasonality': True,
+            'yearly_seasonality': True,
+            'changepoint_prior_scale': 0.05
+        }
     
     # 진행 상황 표시
     progress_bar = st.progress(0)
@@ -334,7 +387,8 @@ def train_models():
                     train_data_key, 
                     test_data_key,
                     seasonal=True,
-                    m=st.session_state.period
+                    m=st.session_state.period,
+                    **arima_params
                 )
             elif model_type == 'exp_smoothing':
                 forecast, model_metrics = cached_train_exp_smoothing(
@@ -345,14 +399,15 @@ def train_models():
             elif model_type == 'prophet':
                 forecast, model_metrics = cached_train_prophet(
                     train_data_key, 
-                    test_data_key
+                    test_data_key,
+                    **prophet_params
                 )
             elif model_type == 'lstm':
                 n_steps = min(48, len(st.session_state.train) // 10)
                 forecast, model_metrics = cached_train_lstm(
                     train_data_key, 
                     test_data_key,
-                    n_steps=n_steps
+                    **lstm_params
                 )
             else:
                 # 일반적인 모델 처리
@@ -636,7 +691,7 @@ def main():
             selected_target = st.sidebar.selectbox(
                 "분석할 변수 선택", 
                 target_options,
-                index=0 if st.session_state.selected_target is None else target_options.index(st.session_state.selected_target)
+                index=5 if st.session_state.selected_target is None else target_options.index(st.session_state.selected_target)
             )
             st.session_state.selected_target = selected_target
         else:
