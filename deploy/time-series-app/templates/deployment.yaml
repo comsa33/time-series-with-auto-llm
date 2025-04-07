@@ -41,7 +41,27 @@ spec:
           value: "http://125.130.4.43:11434"
         - name: OLLAMA_MODEL
           value: "gemma3:27b"
+        - name: STREAMLIT_SERVER_MAX_UPLOAD_SIZE
+          value: "50"
+        - name: STREAMLIT_BROWSER_GATHER_USAGE_STATS
+          value: "false"
+        - name: STREAMLIT_SERVER_COOKIE_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: streamlit-secret
+              key: cookie-secret
+        - name: STREAMLIT_SERVER_HEADLESS
+          value: "true"
+        - name: STREAMLIT_SERVER_SESSION_TIMEOUT_SECONDS
+          value: "1800"
       volumes:
       - name: data-volume
         persistentVolumeClaim:
           claimName: time-series-app-pvc
+      resources:
+          limits:
+            cpu: "4"
+            memory: "8Gi"
+          requests:
+            cpu: "2"
+            memory: "4Gi"
