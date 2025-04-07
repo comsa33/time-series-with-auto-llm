@@ -1,12 +1,13 @@
 """
 시계열 데이터 전처리를 위한 모듈
 """
+from typing import Tuple, Optional
+
+import streamlit as st
 import pandas as pd
 import numpy as np
-from typing import Tuple, Optional, List, Union
 from statsmodels.tsa.seasonal import seasonal_decompose
 from statsmodels.tsa.stattools import adfuller, acf, pacf
-import matplotlib.pyplot as plt
 
 from utils.singleton import Singleton
 from config.settings import app_config
@@ -210,3 +211,30 @@ class DataProcessor(metaclass=Singleton):
         ).astype(int)
         
         return result
+
+
+# utils/data_processor.py 내의 함수를 직접 호출하는 대신 캐싱된 래퍼 함수 사용
+@st.cache_data(ttl=3600)
+def cached_preprocess_data(df, target_col, station):
+    processor = DataProcessor()
+    return processor.preprocess_data(df, target_col, station)
+
+@st.cache_data(ttl=3600)
+def cached_train_test_split(series, test_size):
+    processor = DataProcessor()
+    return processor.train_test_split(series, test_size)
+
+@st.cache_data(ttl=3600)
+def cached_decompose_timeseries(series, period):
+    processor = DataProcessor()
+    return processor.decompose_timeseries(series, period)
+
+@st.cache_data(ttl=3600)
+def cached_check_stationarity(series):
+    processor = DataProcessor()
+    return processor.check_stationarity(series)
+
+@st.cache_data(ttl=3600)
+def cached_get_acf_pacf(series, nlags=40):
+    processor = DataProcessor()
+    return processor.get_acf_pacf(series, nlags)

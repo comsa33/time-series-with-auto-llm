@@ -2,6 +2,9 @@
 서울시 대기질 시계열 분석 메인 Streamlit 앱
 """
 import os
+import psutil
+import time
+import random
 import warnings
 from datetime import datetime, timedelta
 
@@ -11,8 +14,21 @@ import numpy as np
 
 from config.settings import app_config
 from utils.data_reader import get_seoul_air_quality
-from utils.data_processor import DataProcessor
-from utils.visualizer import TimeSeriesVisualizer
+from utils.data_processor import (
+    cached_preprocess_data,
+    cached_train_test_split,
+    cached_decompose_timeseries,
+    cached_check_stationarity,
+    cached_get_acf_pacf
+)
+from utils.visualizer import (
+    cached_plot_timeseries,
+    cached_plot_decomposition,
+    cached_plot_acf_pacf,
+    cached_plot_forecast_comparison,
+    cached_plot_metrics_comparison,
+    cached_plot_residuals
+)
 from utils.llm_connector import LLMConnector
 from prompts.time_series_analysis_prompt import TIME_SERIES_ANALYSIS_PROMPT
 
@@ -35,12 +51,9 @@ st.set_page_config(
 )
 
 
-# 객체 초기화
-data_processor = DataProcessor()
-visualizer = TimeSeriesVisualizer()
-
-# 세션 상태 초기화
 def initialize_session_state():
+    """필요한 세션 상태 변수 초기화"""
+    # 기본 변수들
     if 'df' not in st.session_state:
         st.session_state.df = None
     if 'data_source' not in st.session_state:
@@ -77,6 +90,12 @@ def initialize_session_state():
         st.session_state.test_size = app_config.DEFAULT_TEST_SIZE
     if 'best_model' not in st.session_state:
         st.session_state.best_model = None
+    if 'active_tab' not in st.session_state:
+        st.session_state.active_tab = 0
+    if 'prev_target' not in st.session_state:
+        st.session_state.prev_target = None
+    if 'prev_station' not in st.session_state:
+        st.session_state.prev_station = None
 
 # 모델 팩토리 동적 로드
 @st.cache_resource
@@ -161,36 +180,136 @@ def on_data_source_change():
     st.session_state.test = None
     st.session_state.models_trained = False
 
+
 # 측정소/타겟 변경 콜백
 def update_series():
+    """시계열 데이터 업데이트 함수 - 캐싱 활용"""
     if st.session_state.df is not None:
-        # 선택된 측정소와 타겟 변수에 따라 시계열 데이터 전처리
-        st.session_state.series = data_processor.preprocess_data(
+        # 캐싱된 데이터 전처리 함수 호출
+        st.session_state.series = cached_preprocess_data(
             st.session_state.df, 
             st.session_state.selected_target, 
             st.session_state.selected_station
         )
-        # 모델 학습 상태 초기화
-        st.session_state.train = None
-        st.session_state.test = None
-        st.session_state.models_trained = False
+        
+        # 이전 결과와 현재 설정의 호환성 확인
+        if st.session_state.models_trained:
+            # 타겟 변수나 측정소가 변경되면 결과 초기화
+            if ('prev_target' in st.session_state and 
+                st.session_state.prev_target != st.session_state.selected_target):
+                st.session_state.models_trained = False
+                st.session_state.forecasts = {}
+                st.session_state.metrics = {}
+            
+            if ('prev_station' in st.session_state and 
+                st.session_state.prev_station != st.session_state.selected_station):
+                st.session_state.models_trained = False
+                st.session_state.forecasts = {}
+                st.session_state.metrics = {}
+        
+        # 현재 선택 저장
+        st.session_state.prev_target = st.session_state.selected_target
+        st.session_state.prev_station = st.session_state.selected_station
 
-# 모델 학습 함수
+
+# 모델 학습 결과를 캐싱하는 함수 추가
+@st.cache_data(ttl=3600)
+def cached_train_arima(train_data_key, test_data_key, seasonal, m):
+    """실제 데이터 대신 데이터 키를 사용하여 캐싱 (메모리 효율성)"""
+    try:
+        model_factory = get_model_factory()
+        if model_factory is None:
+            return None, None
+        
+        model = model_factory.get_model('arima')
+        forecast, metrics = model.fit_predict_evaluate(
+            st.session_state.train, 
+            st.session_state.test,
+            seasonal=seasonal,
+            m=m,
+            # 파라미터 최적화 (탐색 범위 제한)
+            max_p=2, max_q=2,
+            max_P=1, max_Q=1,
+            max_d=1, max_D=1,
+            stepwise=True,
+            n_jobs=1  # 병렬 처리 비활성화
+        )
+        return forecast, metrics
+    except Exception as e:
+        st.error(f"ARIMA 모델 학습 오류: {e}")
+        return None, None
+
+@st.cache_data(ttl=3600)
+def cached_train_exp_smoothing(train_data_key, test_data_key, seasonal_periods):
+    try:
+        model_factory = get_model_factory()
+        if model_factory is None:
+            return None, None
+        
+        model = model_factory.get_model('exp_smoothing')
+        forecast, metrics = model.fit_predict_evaluate(
+            st.session_state.train, 
+            st.session_state.test,
+            seasonal_periods=seasonal_periods
+        )
+        return forecast, metrics
+    except Exception as e:
+        st.error(f"지수평활법 모델 학습 오류: {e}")
+        return None, None
+
+@st.cache_data(ttl=3600)
+def cached_train_prophet(train_data_key, test_data_key):
+    try:
+        model_factory = get_model_factory()
+        if model_factory is None:
+            return None, None
+        
+        model = model_factory.get_model('prophet')
+        forecast, metrics = model.fit_predict_evaluate(
+            st.session_state.train, 
+            st.session_state.test,
+            daily_seasonality=True,
+            weekly_seasonality=True
+        )
+        return forecast, metrics
+    except Exception as e:
+        st.error(f"Prophet 모델 학습 오류: {e}")
+        return None, None
+
+@st.cache_data(ttl=3600)
+def cached_train_lstm(train_data_key, test_data_key, n_steps):
+    try:
+        model_factory = get_model_factory()
+        if model_factory is None:
+            return None, None
+        
+        model = model_factory.get_model('lstm')
+        forecast, metrics = model.fit_predict_evaluate(
+            st.session_state.train, 
+            st.session_state.test,
+            n_steps=n_steps,
+            lstm_units=[50],  # 단순화된 모델 구조
+            dropout_rate=0.2,
+            epochs=50,  # 에폭 수 감소
+            batch_size=32,
+            validation_split=0.1
+        )
+        return forecast, metrics
+    except Exception as e:
+        st.error(f"LSTM 모델 학습 오류: {e}")
+        return None, None
+
 def train_models():
+    """모델 학습 및 예측 함수 - 캐싱 활용"""
     # 훈련/테스트 분할
-    st.session_state.train, st.session_state.test = data_processor.train_test_split(
+    st.session_state.train, st.session_state.test = cached_train_test_split(
         st.session_state.series, 
         st.session_state.test_size
     )
     
-    # 모델 팩토리 가져오기
-    model_factory = get_model_factory()
-    
-    if model_factory is None:
-        st.error("모델 팩토리를 로드할 수 없습니다. pmdarima 호환성 문제일 수 있습니다.")
-        st.error("아래 명령어로 문제를 해결할 수 있습니다:")
-        st.code("pip uninstall -y pmdarima numpy && pip install numpy==1.24.3 && pip install pmdarima==2.0.4")
-        return
+    # 데이터 키 생성 (캐싱용)
+    train_data_key = hash(tuple(st.session_state.train.values.tolist()))
+    test_data_key = hash(tuple(st.session_state.test.values.tolist()))
     
     # 진행 상황 표시
     progress_bar = st.progress(0)
@@ -209,55 +328,45 @@ def train_models():
         status_text.text(f"{model_type} 모델 학습 중...")
         
         try:
-            # 모델 인스턴스 생성
-            model = model_factory.get_model(model_type)
-            
-            # 모델별 학습 매개변수 설정
+            # 모델별 캐싱된 학습 함수 호출
             if model_type == 'arima':
-                # ARIMA 모델 파라미터
-                forecast, model_metrics = model.fit_predict_evaluate(
-                    st.session_state.train, 
-                    st.session_state.test,
+                forecast, model_metrics = cached_train_arima(
+                    train_data_key, 
+                    test_data_key,
                     seasonal=True,
                     m=st.session_state.period
                 )
             elif model_type == 'exp_smoothing':
-                # 지수평활법 모델 파라미터
-                forecast, model_metrics = model.fit_predict_evaluate(
-                    st.session_state.train, 
-                    st.session_state.test,
+                forecast, model_metrics = cached_train_exp_smoothing(
+                    train_data_key, 
+                    test_data_key,
                     seasonal_periods=st.session_state.period
                 )
             elif model_type == 'prophet':
-                # Prophet 모델 파라미터
-                forecast, model_metrics = model.fit_predict_evaluate(
-                    st.session_state.train, 
-                    st.session_state.test,
-                    daily_seasonality=True,
-                    weekly_seasonality=True
+                forecast, model_metrics = cached_train_prophet(
+                    train_data_key, 
+                    test_data_key
                 )
             elif model_type == 'lstm':
-                # LSTM 모델 파라미터
-                forecast, model_metrics = model.fit_predict_evaluate(
-                    st.session_state.train, 
-                    st.session_state.test,
-                    n_steps=min(48, len(st.session_state.train) // 10),  # 시퀀스 길이
-                    lstm_units=[50, 50],
-                    dropout_rate=0.2,
-                    epochs=100,
-                    batch_size=32,
-                    validation_split=0.1
+                n_steps = min(48, len(st.session_state.train) // 10)
+                forecast, model_metrics = cached_train_lstm(
+                    train_data_key, 
+                    test_data_key,
+                    n_steps=n_steps
                 )
             else:
-                # 기본 파라미터
+                # 일반적인 모델 처리
+                model_factory = get_model_factory()
+                model = model_factory.get_model(model_type)
                 forecast, model_metrics = model.fit_predict_evaluate(
                     st.session_state.train, 
                     st.session_state.test
                 )
             
-            # 예측 결과 및 메트릭 저장
-            forecasts[model.name] = forecast
-            metrics[model.name] = model_metrics
+            # 유효한 결과만 저장
+            if forecast is not None and model_metrics is not None:
+                forecasts[model_metrics.get('name', model_type)] = forecast
+                metrics[model_metrics.get('name', model_type)] = model_metrics
             
             # 진행 상황 업데이트
             completed_models += 1
@@ -280,8 +389,50 @@ def train_models():
     else:
         st.error("모델 학습 중 오류가 발생했습니다.")
 
+# 앱 시작 시 캐시 정리 함수 (main() 함수 시작 부분에 추가)
+def clear_expired_caches():
+    """
+    오래된 캐시를 정리합니다. 
+    매 요청의 5% 확률로 실행되어 점진적으로 정리합니다.
+    """
+    
+    if random.random() < 0.05:  # 5% 확률로 실행
+        cache_dir = os.path.join(os.path.expanduser("~"), ".streamlit/cache")
+        if os.path.exists(cache_dir):
+            try:
+                # 24시간 이상 된 캐시 파일 삭제
+                current_time = time.time()
+                for file in os.listdir(cache_dir):
+                    file_path = os.path.join(cache_dir, file)
+                    if os.path.isfile(file_path):
+                        # 파일 수정 시간 확인
+                        if current_time - os.path.getmtime(file_path) > 86400:  # 24시간
+                            os.remove(file_path)
+            except Exception:
+                pass  # 캐시 정리 실패 시 무시
+
+# 메모리 사용량 표시 함수
+def show_memory_usage():
+    
+    process = psutil.Process(os.getpid())
+    memory_usage = process.memory_info().rss / 1024 / 1024  # MB 단위
+    
+    # 사이드바 하단에 메모리 사용량 표시
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 📊 시스템 상태")
+    st.sidebar.progress(min(memory_usage / 4000, 1.0))  # 4GB 기준
+    st.sidebar.text(f"메모리 사용량: {memory_usage:.1f} MB")
+    
+    if memory_usage > 3500:  # 3.5GB 이상일 때 경고
+        st.sidebar.warning("⚠️ 메모리 사용량이 높습니다. 불필요한 모델을 제거하거나 샘플 데이터를 사용하세요.")
+
+
 # 메인 함수
 def main():
+    
+    # 캐시 정리 함수 호출
+    clear_expired_caches()
+
     # 세션 상태 초기화
     initialize_session_state()
     
@@ -508,14 +659,16 @@ def main():
             # 시계열 데이터 시각화
             st.subheader("📈 시계열 시각화")
             
-            # 선택한 측정소와 변수에 대한 시계열 그래프
-            station_text = f"{st.session_state.selected_station} " if st.session_state.selected_station else "Seoul City Overall "
-            fig = visualizer.plot_timeseries(
-                st.session_state.series,
-                title=f"{station_text}{st.session_state.selected_target} 시계열 데이터",
-                ylabel=st.session_state.selected_target
-            )
-            st.plotly_chart(fig, use_container_width=True, theme="streamlit")
+            # 캐싱된 시각화 함수 사용
+            if st.session_state.series is not None:
+                station_text = f"{st.session_state.selected_station} " if st.session_state.selected_station else "Seoul City Overall "
+                fig = cached_plot_timeseries(
+                    st.session_state.series,
+                    title=f"{station_text}{st.session_state.selected_target} 시계열 데이터",
+                    xlabel="날짜 (Date)",
+                    ylabel=st.session_state.selected_target
+                )
+                st.plotly_chart(fig, use_container_width=True, theme="streamlit")
         
         with tab2:
             # 시계열 분해
@@ -536,10 +689,10 @@ def main():
             
             try:
                 # 시계열 분해 수행
-                st.session_state.decomposition = data_processor.decompose_timeseries(st.session_state.series, period)
+                st.session_state.decomposition = cached_decompose_timeseries(st.session_state.series, period)
                 
                 # 분해 결과 시각화
-                decomp_fig = visualizer.plot_decomposition(st.session_state.decomposition)
+                decomp_fig = cached_plot_decomposition(st.session_state.decomposition)
                 st.plotly_chart(decomp_fig, use_container_width=True, theme="streamlit")
             except Exception as e:
                 st.error(f"시계열 분해 중 오류 발생: {str(e)}")
@@ -550,7 +703,7 @@ def main():
 
             try:
                 # 정상성 검정 수행
-                st.session_state.stationarity_result = data_processor.check_stationarity(st.session_state.series)
+                st.session_state.stationarity_result = cached_check_stationarity(st.session_state.series)
                 
                 # 시각적 구분선 추가
                 st.markdown("---")
@@ -661,9 +814,9 @@ def main():
                 st.subheader("📊 ACF/PACF 분석")
                 
                 # ACF, PACF 계산
-                st.session_state.acf_values, st.session_state.pacf_values = data_processor.get_acf_pacf(st.session_state.series)
+                st.session_state.acf_values, st.session_state.pacf_values = cached_get_acf_pacf(st.session_state.series)
                 
-                acf_pacf_fig = visualizer.plot_acf_pacf(st.session_state.acf_values, st.session_state.pacf_values)
+                acf_pacf_fig = cached_plot_acf_pacf(st.session_state.acf_values, st.session_state.pacf_values)
                 st.plotly_chart(acf_pacf_fig, use_container_width=True, theme="streamlit")
 
                 with st.expander("✅ 용어 정리", expanded=True):
@@ -704,26 +857,50 @@ def main():
             else:
                 available_models = model_factory.get_all_available_models()
                 
-                selected_models = st.sidebar.multiselect(
-                    "모델 선택",
-                    available_models,
-                    default=available_models[:] if not st.session_state.selected_models else st.session_state.selected_models
-                )
-                st.session_state.selected_models = selected_models
+                # 모델 셀렉터 - expander 내에 배치 (결과가 있는 경우 접힌 상태)
+                with st.expander("모델 선택 및 설정", not st.session_state.models_trained):
+                    selected_models = st.multiselect(
+                        "사용할 모델 선택",
+                        available_models,
+                        default=available_models[:] if not st.session_state.selected_models else st.session_state.selected_models
+                    )
+                    st.session_state.selected_models = selected_models
+                    
+                    # 복잡도 설정 추가
+                    complexity = st.radio(
+                        "모델 복잡도 설정",
+                        ["간단 (빠름, 저메모리)", "중간", "복잡 (정확도 높음, 고메모리)"],
+                        index=0,
+                        horizontal=True,
+                        help="낮은 복잡도는 계산 속도가 빠르지만 정확도가 낮을 수 있습니다."
+                    )
+                    st.session_state.complexity = complexity
                 
-                # 모델 학습 및 예측 버튼
-                if st.button("모델 학습 및 예측 시작"):
-                    if not selected_models:
-                        st.warning("최소한 하나의 모델을 선택해주세요.")
-                    else:
-                        with st.spinner("모델을 학습 중입니다..."):
-                            train_models()
-            
-            # 모델 학습 결과 표시
+                # 모델 학습 버튼 - 항상 표시
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    if st.button("모델 학습 및 예측 시작", use_container_width=True, type="primary"):
+                        if not selected_models:
+                            st.warning("최소한 하나의 모델을 선택해주세요.")
+                        else:
+                            with st.spinner("모델을 학습 중입니다..."):
+                                train_models()
+                
+                with col2:
+                    if st.button("결과 초기화", use_container_width=True):
+                        st.session_state.models_trained = False
+                        st.session_state.forecasts = {}
+                        st.session_state.metrics = {}
+                        st.session_state.best_model = None
+                        st.rerun()
+                
+            # 모델 학습 결과 표시 (항상 확인하여 탭 전환 후에도 표시)
             if st.session_state.models_trained and st.session_state.forecasts:
+                st.markdown("---")
+                st.subheader("📊 모델 예측 결과")
+                
                 # 예측 결과 비교 시각화
-                st.subheader("📊 예측 비교")
-                comparison_fig = visualizer.plot_forecast_comparison(
+                comparison_fig = cached_plot_forecast_comparison(
                     st.session_state.train, 
                     st.session_state.test, 
                     st.session_state.forecasts
@@ -732,7 +909,7 @@ def main():
                 
                 # 메트릭 비교 시각화
                 st.subheader("📈 모델 성능 비교")
-                metrics_fig = visualizer.plot_metrics_comparison(st.session_state.metrics)
+                metrics_fig = cached_plot_metrics_comparison(st.session_state.metrics)
                 st.plotly_chart(metrics_fig, use_container_width=True, theme="streamlit")
                 
                 # 메트릭 표 표시
@@ -746,14 +923,13 @@ def main():
                 
                 # 선택한 최적 모델 상세 분석
                 if st.session_state.best_model in st.session_state.forecasts:
-                    st.subheader(f"📈 최적 모델 ({st.session_state.best_model}) 상세 분석")
-                    
-                    # 실제값과 예측값 비교
-                    best_forecast = st.session_state.forecasts[st.session_state.best_model]
-                    
-                    # 잔차 분석
-                    residuals_fig = visualizer.plot_residuals(st.session_state.test, best_forecast)
-                    st.plotly_chart(residuals_fig, use_container_width=True, theme="streamlit")
+                    with st.expander("최적 모델 상세 분석", expanded=True):
+                        st.subheader(f"📈 최적 모델 ({st.session_state.best_model}) 상세 분석")
+                        
+                        # 잔차 분석
+                        best_forecast = st.session_state.forecasts[st.session_state.best_model]
+                        residuals_fig = cached_plot_residuals(st.session_state.test, best_forecast)
+                        st.plotly_chart(residuals_fig, use_container_width=True, theme="streamlit")
         with tab5:
             # LLM 분석 탭
             st.subheader("🤖 LLM 시계열 데이터 분석")
@@ -925,8 +1101,11 @@ def main():
                     file_name="time_series_analysis_report.md",
                     mime="text/markdown"
                 )
+        # 메모리 사용량 표시
+        show_memory_usage()
     else:
         st.info("분석을 시작하려면 데이터를 업로드하거나 API에서 데이터를 가져오세요.")
+    
 
 # 앱 실행
 if __name__ == "__main__":

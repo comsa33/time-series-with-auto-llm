@@ -3,6 +3,7 @@
 """
 from typing import Dict
 
+import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -627,4 +628,39 @@ class TimeSeriesVisualizer(metaclass=Singleton):
         fig.update_layout(yaxis={'categoryorder': 'total ascending'})
         
         return fig
-    
+
+@st.cache_data(ttl=3600)
+def cached_plot_timeseries(data, title, xlabel, ylabel, color='#1f77b4'):
+    """시계열 그래프 캐싱"""
+    viz = TimeSeriesVisualizer()
+    return viz.plot_timeseries(data, title=title, xlabel=xlabel, ylabel=ylabel, color=color)
+
+@st.cache_data(ttl=3600)
+def cached_plot_decomposition(decomposition):
+    """분해 그래프 캐싱"""
+    viz = TimeSeriesVisualizer()
+    return viz.plot_decomposition(decomposition)
+
+@st.cache_data(ttl=3600)
+def cached_plot_acf_pacf(acf_values, pacf_values):
+    """ACF/PACF 그래프 캐싱"""
+    viz = TimeSeriesVisualizer()
+    return viz.plot_acf_pacf(acf_values, pacf_values)
+
+@st.cache_data(ttl=3600)
+def cached_plot_forecast_comparison(train, test, forecasts):
+    """예측 비교 그래프 캐싱"""
+    viz = TimeSeriesVisualizer()
+    return viz.plot_forecast_comparison(train, test, forecasts)
+
+@st.cache_data(ttl=3600)
+def cached_plot_metrics_comparison(metrics):
+    """메트릭 비교 그래프 캐싱"""
+    viz = TimeSeriesVisualizer()
+    return viz.plot_metrics_comparison(metrics)
+
+@st.cache_data(ttl=3600)
+def cached_plot_residuals(actual, predicted, title="Residual Analysis"):
+    """잔차 분석 그래프 캐싱"""
+    viz = TimeSeriesVisualizer()
+    return viz.plot_residuals(actual, predicted, title=title)
