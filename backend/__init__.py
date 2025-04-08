@@ -1,0 +1,54 @@
+"""
+백엔드 모듈 패키지
+"""
+from backend.data_service import (
+    load_data,
+    update_series,
+    prepare_train_test_data,
+    analyze_decomposition,
+    analyze_stationarity,
+    analyze_acf_pacf
+)
+from backend.model_service import (
+    get_model_factory,
+    train_models
+)
+from backend.visualization_service import (
+    visualize_timeseries,
+    visualize_decomposition,
+    visualize_acf_pacf,
+    visualize_forecast_comparison,
+    visualize_metrics_comparison,
+    visualize_residuals
+)
+from backend.llm_service import (
+    check_analysis_ready,
+    run_llm_analysis
+)
+
+# 외부에서 접근 가능한 함수 정의
+__all__ = [
+    # data_service
+    'load_data',
+    'update_series',
+    'prepare_train_test_data',
+    'analyze_decomposition',
+    'analyze_stationarity',
+    'analyze_acf_pacf',
+    
+    # model_service
+    'get_model_factory',
+    'train_models',
+    
+    # visualization_service
+    'visualize_timeseries',
+    'visualize_decomposition',
+    'visualize_acf_pacf',
+    'visualize_forecast_comparison',
+    'visualize_metrics_comparison',
+    'visualize_residuals',
+    
+    # llm_service
+    'check_analysis_ready',
+    'run_llm_analysis'
+]
