@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import streamlit as st
 
 from backend.data_service import load_data, update_series
-from frontend.components import show_memory_usage
+from frontend.components import show_memory_usage, render_footer
 
 def initialize_sidebar():
     """
@@ -20,6 +20,10 @@ def initialize_sidebar():
     
     # 메모리 사용량 표시
     show_memory_usage()
+
+    # 푸터 렌더링
+    render_footer()
+
 
 def render_data_load_section():
     """

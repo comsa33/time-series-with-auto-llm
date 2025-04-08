@@ -2,11 +2,35 @@
 공통 UI 컴포넌트 모듈
 """
 import os
+import datetime
 
 import psutil
-import pandas as pd
 import streamlit as st
 
+
+def render_footer():
+    """
+    앱 하단에 저작권 및 라이센스 정보 표시
+    """
+    year = datetime.datetime.now().year
+    author = "이루오(Ruo Lee)"
+    e_mail = "comsa333@gmail.com"
+    github = "comsa33"
+    data_source = "서울시 실시간 도시데이터"
+    st.sidebar.markdown(
+        f"""
+        ---
+        © <small> {year} | {author}
+        <br>
+        data: <a href="https://data.seoul.go.kr/dataList/OA-21285/A/1/datasetView.do" target="_blank">{data_source}</a>
+        <br>
+        github: <a href="https://github.com/{github}" target="_blank">{github}</a>
+        <br>
+        e-mail: <a href="mailto:{e_mail}">{e_mail}</a>
+        </small>
+        """,
+        unsafe_allow_html=True
+    )
 
 def show_memory_usage():
     """
