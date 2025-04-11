@@ -223,6 +223,10 @@ def train_models(selected_models, complexity):
     # 모델 개수
     total_models = len(selected_models)
     completed_models = 0
+
+    # 모델 파라미터 저장을 위한 초기화
+    if 'model_params' not in st.session_state:
+        st.session_state.model_params = {}
     
     # 각 모델 학습 및 예측
     for model_type in selected_models:
@@ -231,6 +235,14 @@ def train_models(selected_models, complexity):
         try:
             # 모델별 캐싱된 학습 함수 호출
             if model_type == 'arima':
+                # 파라미터 저장
+                st.session_state.model_params[model_type] = {
+                    'order': arima_params.get('order', (1, 1, 1)),
+                    'seasonal_order': arima_params.get('seasonal_order', (1, 1, 1, st.session_state.period)),
+                    'seasonal': True,
+                    'm': st.session_state.period,
+                    **arima_params
+                }
                 forecast, model_metrics = cached_train_arima(
                     train_data_key, 
                     test_data_key,
@@ -239,18 +251,39 @@ def train_models(selected_models, complexity):
                     **arima_params
                 )
             elif model_type == 'exp_smoothing':
+                # 파라미터 저장
+                st.session_state.model_params[model_type] = {
+                    'model_type': 'hw',
+                    'trend': 'add',
+                    'seasonal': 'add',
+                    'seasonal_periods': st.session_state.period,
+                    'damped_trend': False
+                }
                 forecast, model_metrics = cached_train_exp_smoothing(
                     train_data_key, 
                     test_data_key,
                     seasonal_periods=st.session_state.period
                 )
             elif model_type == 'prophet':
+                # 파라미터 저장
+                st.session_state.model_params[model_type] = {
+                    'daily_seasonality': prophet_params.get('daily_seasonality', False),
+                    'weekly_seasonality': prophet_params.get('weekly_seasonality', True),
+                    'yearly_seasonality': prophet_params.get('yearly_seasonality', False),
+                    'changepoint_prior_scale': prophet_params.get('changepoint_prior_scale', 0.05)
+                }
                 forecast, model_metrics = cached_train_prophet(
                     train_data_key, 
                     test_data_key,
                     **prophet_params
                 )
             elif model_type == 'lstm':
+                # 파라미터 저장
+                st.session_state.model_params[model_type] = {
+                    'n_steps': lstm_params.get('n_steps', 24),
+                    'lstm_units': lstm_params.get('lstm_units', [50]),
+                    'epochs': lstm_params.get('epochs', 50)
+                }
                 forecast, model_metrics = cached_train_lstm(
                     train_data_key, 
                     test_data_key,
@@ -294,7 +327,6 @@ def train_models(selected_models, complexity):
         return False
 
 
-# backend/model_service.py 확장
 def train_models_with_params(selected_models: List[str], tuned_params: Dict[str, Any], prefix: str = "") -> bool:
     """
     조정된 파라미터로 모델 학습 및 예측 수행
@@ -311,20 +343,158 @@ def train_models_with_params(selected_models: List[str], tuned_params: Dict[str,
     tuned_forecasts = {}
     tuned_metrics = {}
     
+    # 모델 파라미터 저장 공간 초기화
+    if 'model_params' not in st.session_state:
+        st.session_state.model_params = {}
+    
     # 각 모델 학습 및 예측
     for i, model_type in enumerate(selected_models):
         tuned_model_name = f"{prefix}{model_type}"
         status_text.text(f"{tuned_model_name} 모델 학습 중...")
         
         try:
-            # 모델 인스턴스 생성 및 학습
-            model = get_model_factory().get_model(model_type, name=tuned_model_name)
-            valid_params = validate_model_parameters(model_type, tuned_params)
-            forecast, metrics = model.fit_predict_evaluate(
-                st.session_state.train, 
-                st.session_state.test,
-                **valid_params
-            )
+            # 자세한 디버깅 정보 출력
+            st.write(f"모델 유형: {model_type}")
+            st.write(f"조정된 파라미터: {tuned_params}")
+            
+            # 모델 유형에 따른 처리
+            if model_type == 'exp_smoothing':
+                # 지수평활법 모델에 필요한 파라미터 분리
+                # 모델 생성 시 필요한 파라미터
+                model_params = {
+                    'model_type': tuned_params.get('model_type', 'hw'),
+                    'trend': tuned_params.get('trend', 'add'),
+                    'seasonal': tuned_params.get('seasonal', 'add'),
+                    'seasonal_periods': tuned_params.get('seasonal_periods', st.session_state.period),
+                    'damped_trend': tuned_params.get('damped_trend', False),
+                    'use_boxcox': tuned_params.get('use_boxcox', False)
+                }
+                
+                # 모델 유형 확인
+                model_type_value = model_params.get('model_type')
+                
+                # fit 메서드에 전달할 파라미터
+                fit_params = {}
+                
+                # 모델 유형에 따라 다른 파라미터 설정
+                if model_type_value == 'simple':
+                    # 단순 지수평활법은 alpha 파라미터를 받음
+                    if 'alpha' in tuned_params:
+                        fit_params['smoothing_level'] = tuned_params['alpha']
+                elif model_type_value == 'holt':
+                    # Holt 모델은 alpha, beta 파라미터를 받음
+                    if 'alpha' in tuned_params:
+                        fit_params['smoothing_level'] = tuned_params['alpha']
+                    if 'beta' in tuned_params:
+                        fit_params['smoothing_trend'] = tuned_params['beta']
+                else:  # 'hw' (default)
+                    # ExponentialSmoothing은 alpha, beta, gamma를 직접 받지 않음
+                    # 대신 최적화 관련 파라미터 사용
+                    fit_params['optimized'] = tuned_params.get('optimized', True)
+                    if 'use_brute' in tuned_params:
+                        fit_params['use_brute'] = tuned_params['use_brute']
+                
+                # 파라미터 저장
+                st.session_state.model_params[tuned_model_name] = {**model_params, **fit_params}
+                
+                # 디버깅 정보 출력
+                st.write(f"모델 생성 파라미터: {model_params}")
+                st.write(f"fit 메서드 파라미터: {fit_params}")
+                
+                try:
+                    # 직접 모델 생성 및 학습
+                    model_factory = get_model_factory()
+                    model = model_factory.get_model(model_type, name=tuned_model_name)
+                    
+                    # 모델 생성 파라미터로 fit 호출
+                    model.fit(st.session_state.train, **model_params)
+                    
+                    # 예측 및 평가
+                    forecast = model.predict(len(st.session_state.test), st.session_state.test)
+                    metrics = model.evaluate(st.session_state.test, forecast)
+                    metrics['name'] = tuned_model_name
+                except Exception as e:
+                    st.error(f"{tuned_model_name} 모델 학습 중 오류 발생: {e}")
+                    st.exception(e)  # 상세 오류 정보 출력
+                    continue  # 다음 모델로 진행
+            
+            elif model_type == 'arima':
+                # ARIMA 모델에 필요한 파라미터 보장
+                arima_params = {
+                    'order': tuned_params.get('order', (1, 1, 1)),
+                    'seasonal_order': tuned_params.get('seasonal_order', (1, 1, 1, st.session_state.period)),
+                    'seasonal': tuned_params.get('seasonal', True),
+                    'm': tuned_params.get('m', st.session_state.period)
+                }
+                
+                # 파라미터 저장
+                st.session_state.model_params[tuned_model_name] = arima_params
+                
+                # 직접 모델 생성 및 학습
+                model_factory = get_model_factory()
+                model = model_factory.get_model(model_type, name=tuned_model_name)
+                forecast, metrics = model.fit_predict_evaluate(
+                    st.session_state.train, 
+                    st.session_state.test,
+                    **arima_params
+                )
+                metrics['name'] = tuned_model_name
+            
+            elif model_type == 'prophet':
+                # Prophet 모델에 필요한 파라미터 보장
+                prophet_params = {
+                    'daily_seasonality': tuned_params.get('daily_seasonality', False),
+                    'weekly_seasonality': tuned_params.get('weekly_seasonality', True),
+                    'yearly_seasonality': tuned_params.get('yearly_seasonality', False),
+                    'seasonality_mode': tuned_params.get('seasonality_mode', 'additive'),
+                    'changepoint_prior_scale': tuned_params.get('changepoint_prior_scale', 0.05)
+                }
+                
+                # 파라미터 저장
+                st.session_state.model_params[tuned_model_name] = prophet_params
+                
+                # 직접 모델 생성 및 학습
+                model_factory = get_model_factory()
+                model = model_factory.get_model(model_type, name=tuned_model_name)
+                forecast, metrics = model.fit_predict_evaluate(
+                    st.session_state.train, 
+                    st.session_state.test,
+                    **prophet_params
+                )
+                metrics['name'] = tuned_model_name
+                
+            elif model_type == 'lstm':
+                # LSTM 모델에 필요한 파라미터 보장
+                lstm_params = {
+                    'n_steps': tuned_params.get('n_steps', 24),
+                    'lstm_units': tuned_params.get('lstm_units', [50]),
+                    'dropout_rate': tuned_params.get('dropout_rate', 0.2),
+                    'epochs': tuned_params.get('epochs', 50)
+                }
+                
+                # 파라미터 저장
+                st.session_state.model_params[tuned_model_name] = lstm_params
+                
+                # 직접 모델 생성 및 학습
+                model_factory = get_model_factory()
+                model = model_factory.get_model(model_type, name=tuned_model_name)
+                forecast, metrics = model.fit_predict_evaluate(
+                    st.session_state.train, 
+                    st.session_state.test,
+                    **lstm_params
+                )
+                metrics['name'] = tuned_model_name
+                
+            else:
+                # 기타 모델 처리
+                model_factory = get_model_factory()
+                model = model_factory.get_model(model_type, name=tuned_model_name)
+                forecast, metrics = model.fit_predict_evaluate(
+                    st.session_state.train, 
+                    st.session_state.test,
+                    **tuned_params
+                )
+                metrics['name'] = tuned_model_name
             
             # 결과 저장
             tuned_forecasts[tuned_model_name] = forecast
@@ -335,6 +505,7 @@ def train_models_with_params(selected_models: List[str], tuned_params: Dict[str,
             
         except Exception as e:
             st.error(f"{tuned_model_name} 모델 학습 중 오류 발생: {e}")
+            st.exception(e)  # 상세 오류 정보 출력
     
     # 모든 모델 학습 완료 후 결과 저장
     if tuned_forecasts:

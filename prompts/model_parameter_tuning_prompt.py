@@ -24,8 +24,8 @@ MODEL_PARAMETER_TUNING_PROMPT = """
     "param2": value2
   },
   "tuning_rationale": {
-    "param1": "param1 조정 근거",
-    "param2": "param2 조정 근거"
+    "param1": "param1 조정 근거(한국어로)",
+    "param2": "param2 조정 근거(한국어로)"
   },
   "expected_improvement": {
     "RMSE": "RMSE 예상 개선율",

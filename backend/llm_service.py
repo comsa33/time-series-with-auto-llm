@@ -245,20 +245,70 @@ def get_model_parameters_for_recommendation(model_type: str) -> Dict[str, Any]:
     """
     LLM에 전달할 모델 파라미터 정보 수집
     """
-    # 모델 팩토리에서 기본 모델 인스턴스 생성
-    model_factory = get_model_factory()
-    model = model_factory.get_model(model_type)
+    # 기본 파라미터 초기화
+    default_params = {}
     
-    # 기존 학습 결과에서 파라미터 가져오기 (있는 경우)
-    for metrics in st.session_state.metrics.values():
-        if 'name' in metrics and metrics['name'] == model_type:
-            return model.get_params()
+    # 모델 유형에 따른 기본 파라미터 설정
+    if model_type == 'arima':
+        default_params = {
+            'order': (1, 1, 1),
+            'seasonal_order': (1, 1, 1, 24),
+            'seasonal': True,
+            'm': 24
+        }
+    elif model_type == 'exp_smoothing':
+        default_params = {
+            'model_type': 'hw',
+            'trend': 'add',
+            'seasonal': 'add',
+            'seasonal_periods': 24,
+            'damped_trend': False
+        }
+    elif model_type == 'prophet':
+        default_params = {
+            'daily_seasonality': True,
+            'weekly_seasonality': True,
+            'yearly_seasonality': False,
+            'seasonality_mode': 'additive',
+            'changepoint_prior_scale': 0.05
+        }
+    elif model_type == 'lstm':
+        default_params = {
+            'n_steps': 24,
+            'lstm_units': [50],
+            'dropout_rate': 0.2,
+            'epochs': 50
+        }
+    
+    # 세션 상태에서 사용된 모델 파라미터 확인
+    if 'model_params' in st.session_state and model_type in st.session_state.model_params:
+        return st.session_state.model_params[model_type]
+    
+    # 대체 검색: 유사한 이름의 모델 찾기
+    if 'metrics' in st.session_state:
+        for model_name, metrics in st.session_state.metrics.items():
+            # 대소문자 구분 없이 모델 유형 비교
+            model_type_lower = model_type.lower()
+            model_name_lower = model_name.lower()
+            
+            # 모델 이름 포함 관계 확인
+            if (model_type_lower in model_name_lower or
+                model_name_lower in model_type_lower or
+                (metrics.get('name') and model_type_lower in metrics.get('name', '').lower())):
+                
+                # 모델 팩토리에서 해당 모델 인스턴스 생성
+                model_factory = get_model_factory()
+                try:
+                    model = model_factory.get_model(model_type)
+                    params = model.get_params()
+                    if params:  # 파라미터가 있으면 반환
+                        return params
+                except Exception as e:
+                    st.warning(f"모델 파라미터 조회 중 오류 발생: {e}")
     
     # 기본 파라미터 반환
-    return model.get_params() if hasattr(model, 'get_params') else {}
+    return default_params
 
-
-# backend/llm_service.py에 추가할 함수들
 
 def _collect_data_info() -> Dict[str, Any]:
     """

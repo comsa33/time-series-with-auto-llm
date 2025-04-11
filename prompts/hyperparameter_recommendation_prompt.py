@@ -25,12 +25,12 @@ HYPERPARAMETER_RECOMMENDATION_PROMPT = """
     "param2": value2
   }},
   "rationale": {{
-    "param1": "param1 추천 근거",
-    "param2": "param2 추천 근거"
+    "param1": "param1 추천 근거(한국어로)",
+    "param2": "param2 추천 근거(한국어로)"
   }},
   "expected_improvement": {{
-    "metric1": "예상 개선 효과 1",
-    "metric2": "예상 개선 효과 2"
+    "metric1": "예상 개선 효과 1(한국어로)",
+    "metric2": "예상 개선 효과 2(한국어로)"
   }}
 }}
 ```
