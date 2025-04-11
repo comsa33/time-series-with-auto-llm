@@ -99,7 +99,7 @@ def prepare_train_test_data(test_size=None):
         test_size: 테스트 데이터 비율 (기본값: None)
     """
     if test_size is None:
-        test_size = st.session_state.test_size
+        test_size = st.session_state.test_size if 'test_size' in st.session_state else 0.2  # Default to 20% if undefined
         
     if st.session_state.series is not None:
         st.session_state.train, st.session_state.test = cached_train_test_split(
