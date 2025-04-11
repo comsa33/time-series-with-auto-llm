@@ -1,6 +1,7 @@
 """
 모델 학습 및 예측 관련 서비스 모듈
 """
+import traceback
 from typing import List, Dict, Any
 
 import streamlit as st
@@ -25,7 +26,7 @@ def get_model_factory():
         from models.model_factory import ModelFactory
         return ModelFactory()
     except Exception as e:
-        st.error(f"모델 로드 중 오류 발생: {e}")
+        st.error(f"모델 로드 중 오류 발생: {traceback.format_exc()}")
         st.error("필요한 라이브러리를 재설치하세요: pip uninstall -y pmdarima numpy && pip install numpy==1.24.3 && pip install pmdarima==2.0.4")
         return None
 
@@ -61,7 +62,7 @@ def cached_train_arima(train_data_key, test_data_key, seasonal, m, **kwargs):
         )
         return forecast, metrics
     except Exception as e:
-        st.error(f"ARIMA 모델 학습 오류: {e}")
+        st.error(f"ARIMA 모델 학습 오류: {traceback.format_exc()}")
         return None, None
 
 # Prophet 모델용 캐싱 함수
@@ -91,7 +92,7 @@ def cached_train_prophet(train_data_key, test_data_key, **kwargs):
         )
         return forecast, metrics
     except Exception as e:
-        st.error(f"Prophet 모델 학습 오류: {e}")
+        st.error(f"Prophet 모델 학습 오류: {traceback.format_exc()}")
         return None, None
 
 # LSTM 모델용 캐싱 함수
@@ -121,7 +122,7 @@ def cached_train_lstm(train_data_key, test_data_key, **kwargs):
         )
         return forecast, metrics
     except Exception as e:
-        st.error(f"LSTM 모델 학습 오류: {e}")
+        st.error(f"LSTM 모델 학습 오류: {traceback.format_exc()}")
         return None, None
 
 @st.cache_data(ttl=3600)
@@ -150,7 +151,7 @@ def cached_train_exp_smoothing(train_data_key, test_data_key, seasonal_periods):
         )
         return forecast, metrics
     except Exception as e:
-        st.error(f"지수평활법 모델 학습 오류: {e}")
+        st.error(f"지수평활법 모델 학습 오류: {traceback.format_exc()}")
         return None, None
 
 # 차분 데이터용 캐시 함수 추가
@@ -172,7 +173,7 @@ def cached_train_arima_differenced(train_data_key, test_data_key, seasonal, m, *
         )
         return forecast, metrics
     except Exception as e:
-        st.error(f"차분 데이터로 ARIMA 모델 학습 오류: {e}")
+        st.error(f"차분 데이터로 ARIMA 모델 학습 오류: {traceback.format_exc()}")
         return None, None
 
 @st.cache_data(ttl=3600)
@@ -191,7 +192,7 @@ def cached_train_exp_smoothing_differenced(train_data_key, test_data_key, season
         )
         return forecast, metrics
     except Exception as e:
-        st.error(f"차분 데이터로 지수평활법 모델 학습 오류: {e}")
+        st.error(f"차분 데이터로 지수평활법 모델 학습 오류: {traceback.format_exc()}")
         return None, None
 
 @st.cache_data(ttl=3600)
@@ -210,7 +211,7 @@ def cached_train_lstm_differenced(train_data_key, test_data_key, **kwargs):
         )
         return forecast, metrics
     except Exception as e:
-        st.error(f"차분 데이터로 LSTM 모델 학습 오류: {e}")
+        st.error(f"차분 데이터로 LSTM 모델 학습 오류: {traceback.format_exc()}")
         return None, None
 
 def evaluate_prediction(actual: pd.Series, predicted: np.ndarray) -> Dict[str, float]:
@@ -479,7 +480,7 @@ def train_models(selected_models, complexity):
             progress_bar.progress(completed_models / total_models)
             
         except Exception as e:
-            st.error(f"{model_type} 모델 학습 중 오류 발생: {e}")
+            st.error(f"{model_type} 모델 학습 중 오류 발생: {traceback.format_exc()}")
     
     # 모든 모델 학습 완료 후 결과 저장
     if forecasts:
@@ -585,7 +586,7 @@ def train_models_with_params(selected_models: List[str], tuned_params: Dict[str,
                     metrics = model.evaluate(st.session_state.test, forecast)
                     metrics['name'] = tuned_model_name
                 except Exception as e:
-                    st.error(f"{tuned_model_name} 모델 학습 중 오류 발생: {e}")
+                    st.error(f"{tuned_model_name} 모델 학습 중 오류 발생: {traceback.format_exc()}")
                     st.exception(e)  # 상세 오류 정보 출력
                     continue  # 다음 모델로 진행
             
@@ -675,7 +676,7 @@ def train_models_with_params(selected_models: List[str], tuned_params: Dict[str,
             progress_bar.progress((i + 1) / len(selected_models))
             
         except Exception as e:
-            st.error(f"{tuned_model_name} 모델 학습 중 오류 발생: {e}")
+            st.error(f"{tuned_model_name} 모델 학습 중 오류 발생: {traceback.format_exc()}")
             st.exception(e)  # 상세 오류 정보 출력
     
     # 모든 모델 학습 완료 후 결과 저장
