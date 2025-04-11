@@ -80,6 +80,7 @@ def initialize_session_state():
     if 'seasonal_diff_order' not in st.session_state:
         st.session_state.seasonal_diff_order = 0
     if 'use_differencing' not in st.session_state:
+        st.session_state.use_differencing = False
     if 'differenced_series' not in st.session_state:
         st.session_state.differenced_series = None
     if 'differencing_recommendation' not in st.session_state:
