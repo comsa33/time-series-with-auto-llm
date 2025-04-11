@@ -119,7 +119,7 @@ else:
         
         # 결과 해석 도움말
         with st.expander("분해 결과 해석 방법", expanded=False):
-            st.markdown("""
+            st.markdown(f"""
             ### 📊 분해 결과 해석 방법
             
             #### 1. 추세(Trend) 성분
