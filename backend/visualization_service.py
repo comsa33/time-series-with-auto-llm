@@ -68,14 +68,52 @@ def visualize_forecast_comparison(train_data=None, test_data=None, forecasts=Non
         plotly.graph_objects.Figure: 예측 비교 그래프
     """
     # 매개변수가 없으면 세션 상태 사용
-    train_data = train_data if train_data is not None else st.session_state.train
-    test_data = test_data if test_data is not None else st.session_state.test
+    if train_data is None:
+        if st.session_state.use_differencing and st.session_state.diff_train is not None:
+            # 차분 모드이고 diff_train이 있는 경우 diff_train 사용
+            st.info("차분 데이터 모드입니다. 원본 데이터로 시각화합니다.")
+            train_data = st.session_state.train  # 원본 데이터로 시각화
+        else:
+            # 일반 모드
+            train_data = st.session_state.train
+    
+    if test_data is None:
+        if st.session_state.use_differencing and st.session_state.diff_test is not None:
+            # 차분 모드이고 diff_test가 있는 경우 diff_test 사용
+            test_data = st.session_state.test  # 원본 데이터로 시각화
+        else:
+            # 일반 모드
+            test_data = st.session_state.test
+    
     forecasts = forecasts if forecasts is not None else st.session_state.forecasts
     
     # 데이터 유효성 검사
     if train_data is None or test_data is None:
         st.error("시각화에 필요한 훈련/테스트 데이터가 없습니다.")
-        return None
+        
+        # 디버깅 정보 표시
+        st.write("### 세션 상태 확인:")
+        st.write(f"train: {'존재함' if hasattr(st.session_state, 'train') and st.session_state.train is not None else '없음'}")
+        st.write(f"test: {'존재함' if hasattr(st.session_state, 'test') and st.session_state.test is not None else '없음'}")
+        st.write(f"diff_train: {'존재함' if hasattr(st.session_state, 'diff_train') and st.session_state.diff_train is not None else '없음'}")
+        st.write(f"diff_test: {'존재함' if hasattr(st.session_state, 'diff_test') and st.session_state.diff_test is not None else '없음'}")
+        st.write(f"use_differencing: {st.session_state.use_differencing if hasattr(st.session_state, 'use_differencing') else '설정 안됨'}")
+        
+        # 차분 모드이고 원본 데이터가 없는 경우, 차분 데이터 사용 시도
+        if st.session_state.use_differencing:
+            if train_data is None and hasattr(st.session_state, 'diff_train') and st.session_state.diff_train is not None:
+                st.warning("원본 train 데이터가 없어 차분 데이터를 사용합니다.")
+                train_data = st.session_state.diff_train
+            
+            if test_data is None and hasattr(st.session_state, 'diff_test') and st.session_state.diff_test is not None:
+                st.warning("원본 test 데이터가 없어 차분 데이터를 사용합니다.")
+                test_data = st.session_state.diff_test
+            
+            # 여전히 데이터가 없는 경우
+            if train_data is None or test_data is None:
+                return None
+        else:
+            return None
     
     if not forecasts:
         st.error("시각화할 예측 결과가 없습니다.")

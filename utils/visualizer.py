@@ -743,8 +743,21 @@ def cached_plot_acf_pacf(acf_values, pacf_values):
 @st.cache_data(ttl=3600)
 def cached_plot_forecast_comparison(train, test, forecasts):
     """예측 비교 그래프 캐싱"""
-    viz = TimeSeriesVisualizer()
-    return viz.plot_forecast_comparison(train, test, forecasts)
+    try:
+        # numpy 배열을 Series로 변환 (인덱스 보장)
+        for model_name, forecast in forecasts.items():
+            if isinstance(forecast, np.ndarray):
+                # 길이 맞춤
+                min_len = min(len(test), len(forecast))
+                forecasts[model_name] = pd.Series(forecast[:min_len], index=test.index[:min_len])
+                
+        viz = TimeSeriesVisualizer()
+        return viz.plot_forecast_comparison(train, test, forecasts)
+    except Exception as e:
+        st.error(f"예측 비교 그래프 생성 중 오류: {str(e)}")
+        import traceback
+        st.error(f"상세 오류: {traceback.format_exc()}")
+        return None
 
 @st.cache_data(ttl=3600)
 def cached_plot_metrics_comparison(metrics):

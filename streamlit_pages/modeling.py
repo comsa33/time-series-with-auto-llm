@@ -110,6 +110,15 @@ with col1:
                         st.success("모델 학습 완료!")
                 else:
                     st.error("훈련/테스트 데이터 준비 중 오류가 발생했습니다.")
+        # 차분 데이터 확인
+        if st.session_state.use_differencing:
+            with st.expander("차분 데이터 확인", expanded=False):
+                st.write("### 원본 데이터:")
+                st.write(f"train: {type(st.session_state.train)}, 길이: {len(st.session_state.train) if st.session_state.train is not None else 'None'}")
+                st.write(f"test: {type(st.session_state.test)}, 길이: {len(st.session_state.test) if st.session_state.test is not None else 'None'}")
+                st.write("### 차분 데이터:")
+                st.write(f"diff_train: {type(st.session_state.diff_train)}, 길이: {len(st.session_state.diff_train) if st.session_state.diff_train is not None else 'None'}")
+                st.write(f"diff_test: {type(st.session_state.diff_test)}, 길이: {len(st.session_state.diff_test) if st.session_state.diff_test is not None else 'None'}")
 
 with col2:
     if st.button("결과 초기화", use_container_width=True):

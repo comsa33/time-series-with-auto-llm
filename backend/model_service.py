@@ -492,7 +492,22 @@ def train_models(selected_models, complexity):
         else:
             st.error("모델 학습에 필요한 데이터가 없습니다.")
             return False
-    
+
+    # 차분 데이터 사용 시 원본 데이터도 세션 상태에 유지
+    if st.session_state.use_differencing:
+        # 차분 데이터로 학습하더라도 시각화를 위해 원본 데이터 유지
+        if hasattr(st.session_state, 'series') and st.session_state.series is not None:
+            if st.session_state.train is None or st.session_state.test is None:
+                # 원본 시리즈로부터 train/test 데이터 분할
+                from backend.data_service import cached_train_test_split
+                try:
+                    train, test = cached_train_test_split(st.session_state.series, st.session_state.test_size)
+                    st.session_state.train = train
+                    st.session_state.test = test
+                    st.info("차분 데이터 사용 시 시각화를 위해 원본 데이터도 준비했습니다.")
+                except Exception as e:
+                    st.error(f"원본 데이터 분할 중 오류: {e}")
+
     # 진행 상황 표시
     progress_bar = st.progress(0)
     status_text = st.empty()

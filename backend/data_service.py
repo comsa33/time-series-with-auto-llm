@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 
 import streamlit as st
 import pandas as pd
+import numpy as np
 
 from config.settings import app_config
 from utils.data_reader import get_seoul_air_quality
@@ -281,6 +282,14 @@ def prepare_differenced_train_test_data(test_size=None):
             st.session_state.differenced_series, 
             test_size
         )
+        
+        # 원본 데이터도 함께 분할 (시각화용)
+        if st.session_state.series is not None:
+            st.session_state.train, st.session_state.test = cached_train_test_split(
+                st.session_state.series,
+                test_size
+            )
+            
         return True
     return False
 
@@ -298,52 +307,81 @@ def inverse_transform_forecast(forecast, original_series=None, diff_order=None, 
     Returns:
         원래 스케일로 변환된 예측값
     """
-    # 기본값 설정 (train/diff_train 모두 확인)
-    if original_series is None:
-        if hasattr(st.session_state, 'train') and st.session_state.train is not None:
-            original_series = st.session_state.train
-        elif hasattr(st.session_state, 'diff_train') and st.session_state.diff_train is not None:
-            # 차분된 데이터를 사용할 경우, 원본 시계열로 되돌리기 위해 원래 시계열 필요
-            original_series = st.session_state.series
+    try:
+        # 기본값 설정 (train/diff_train 모두 확인)
+        if original_series is None:
+            if hasattr(st.session_state, 'train') and st.session_state.train is not None:
+                original_series = st.session_state.train
+            elif hasattr(st.session_state, 'diff_train') and st.session_state.diff_train is not None:
+                # 차분된 데이터를 사용할 경우, 원본 시계열로 되돌리기 위해 원래 시계열 필요
+                original_series = st.session_state.series
+            else:
+                raise ValueError("원본 시계열 데이터를 찾을 수 없습니다.")
+            
+        if diff_order is None:
+            diff_order = st.session_state.diff_order if hasattr(st.session_state, 'diff_order') else 0
+            
+        if seasonal_diff_order is None:
+            seasonal_diff_order = st.session_state.seasonal_diff_order if hasattr(st.session_state, 'seasonal_diff_order') else 0
+            
+        if seasonal_period is None:
+            if hasattr(st.session_state, 'differencing_recommendation') and st.session_state.differencing_recommendation and st.session_state.differencing_recommendation.get('seasonal_period'):
+                seasonal_period = st.session_state.differencing_recommendation['seasonal_period']
+            else:
+                seasonal_period = st.session_state.period if hasattr(st.session_state, 'period') else 24
+        
+        # 예측값을 시리즈로 변환 (인덱스 설정)
+        if not isinstance(forecast, pd.Series):
+            if isinstance(forecast, np.ndarray):
+                # 테스트 데이터 인덱스 사용
+                if hasattr(st.session_state, 'test') and st.session_state.test is not None:
+                    test_index = st.session_state.test.index
+                    
+                    # 길이 조정 - 이 부분이 핵심 수정사항
+                    min_len = min(len(forecast), len(test_index))
+                    forecast = forecast[:min_len]
+                    test_index = test_index[:min_len]
+                    
+                    forecast_series = pd.Series(forecast, index=test_index)
+                else:
+                    # 인덱스를 만들 수 없는 경우, 예측 길이만큼의 인덱스 생성
+                    last_date = original_series.index[-1]
+                    freq = pd.infer_freq(original_series.index)
+                    test_index = pd.date_range(start=last_date, periods=len(forecast)+1, freq=freq)[1:]
+                
+                forecast_series = pd.Series(forecast, index=test_index)
         else:
-            raise ValueError("원본 시계열 데이터를 찾을 수 없습니다.")
+            forecast_series = forecast
         
-    if diff_order is None:
-        diff_order = st.session_state.diff_order if hasattr(st.session_state, 'diff_order') else 0
+        inverted_forecast = cached_apply_inverse_differencing(
+            forecast_series,
+            original_series,
+            diff_order,
+            seasonal_diff_order,
+            seasonal_period
+        )
         
-    if seasonal_diff_order is None:
-        seasonal_diff_order = st.session_state.seasonal_diff_order if hasattr(st.session_state, 'seasonal_diff_order') else 0
+        # 유효성 검사 추가
+        if inverted_forecast is None or len(inverted_forecast) == 0:
+            st.warning(f"역변환 결과가 비어 있습니다. 원본 예측 결과를 반환합니다.")
+            return forecast_series
+            
+        return inverted_forecast
         
-    if seasonal_period is None:
-        if hasattr(st.session_state, 'differencing_recommendation') and st.session_state.differencing_recommendation and st.session_state.differencing_recommendation.get('seasonal_period'):
-            seasonal_period = st.session_state.differencing_recommendation['seasonal_period']
-        else:
-            seasonal_period = st.session_state.period if hasattr(st.session_state, 'period') else 24
-    
-    # 예측값을 시리즈로 변환 (인덱스 설정)
-    if not isinstance(forecast, pd.Series):
-        # 테스트 인덱스 확인 (test/diff_test 모두 고려)
-        if hasattr(st.session_state, 'test') and st.session_state.test is not None:
-            test_index = st.session_state.test.index
-        elif hasattr(st.session_state, 'diff_test') and st.session_state.diff_test is not None:
-            test_index = st.session_state.diff_test.index
-        else:
-            # 인덱스를 만들 수 없는 경우, 예측 길이만큼의 인덱스 생성
-            last_date = original_series.index[-1]
-            freq = pd.infer_freq(original_series.index)
-            test_index = pd.date_range(start=last_date, periods=len(forecast)+1, freq=freq)[1:]
+    except Exception as e:
+        st.error(f"예측 결과 역변환 중 오류 발생: {str(e)}")
+        import traceback
+        st.error(f"상세 오류: {traceback.format_exc()}")
         
-        forecast_series = pd.Series(forecast, index=test_index)
-    else:
-        forecast_series = forecast
-    
-    # 역변환 수행
-    inverted_forecast = cached_apply_inverse_differencing(
-        forecast_series,
-        original_series,
-        diff_order,
-        seasonal_diff_order,
-        seasonal_period
-    )
-    
-    return inverted_forecast
+        # 오류 발생 시 원본 예측값 반환 - 여기도 길이 조정 추가
+        st.warning("역변환 실패로 원본 예측값을 반환합니다.")
+        if not isinstance(forecast, pd.Series):
+            if isinstance(forecast, np.ndarray) and len(forecast) > 0:
+                # test 데이터의 인덱스 사용
+                if hasattr(st.session_state, 'test') and st.session_state.test is not None:
+                    test_index = st.session_state.test.index
+                    min_len = min(len(forecast), len(test_index))
+                    
+                    # 길이 맞추기
+                    return pd.Series(forecast[:min_len], index=test_index[:min_len])
+        return forecast
