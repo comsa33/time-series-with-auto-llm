@@ -694,8 +694,7 @@ def train_models(selected_models, complexity):
                     'changepoint_prior_scale': prophet_params.get('changepoint_prior_scale', 0.05)
                 }
                 
-                # Prophet은 차분을 내장하고 있으므로 원본 데이터를 우선적으로 사용
-                # train과 test가 None이 아닌지 확인
+                # Prophet은 항상 원본 데이터 사용 (차분 데이터 무시)
                 if st.session_state.train is not None and st.session_state.test is not None:
                     train_hash = hash(tuple(st.session_state.train.values.tolist()))
                     test_hash = hash(tuple(st.session_state.test.values.tolist()))
@@ -705,23 +704,9 @@ def train_models(selected_models, complexity):
                         **prophet_params
                     )
                 else:
-                    # 원본 데이터가 없는 경우, 차분 데이터로 대체
-                    st.warning("Prophet 모델은 원본 데이터 사용이 권장됩니다. 차분 데이터로 학습합니다.")
-                    # 차분 데이터의 해시 생성
-                    train_hash = hash(tuple(st.session_state.diff_train.values.tolist()))
-                    test_hash = hash(tuple(st.session_state.diff_test.values.tolist()))
-                    
-                    # Prophet 모델 학습
-                    forecast, model_metrics = cached_train_prophet(
-                        train_hash, 
-                        test_hash,
-                        **prophet_params
-                    )
-                    
-                    # 역변환 적용
-                    if forecast is not None:
-                        from backend.data_service import inverse_transform_forecast
-                        forecast = inverse_transform_forecast(forecast)
+                    st.error(f"Prophet 모델 학습을 위한 데이터가 없습니다.")
+                    forecast = None
+                    model_metrics = None
                 
             elif model_type == 'lstm':
                 # 파라미터 저장
@@ -731,51 +716,19 @@ def train_models(selected_models, complexity):
                     'epochs': lstm_params.get('epochs', 50)
                 }
                 
-                # LSTM은 스케일링이 내장되어 있으므로 차분 데이터도 사용 가능
-                if st.session_state.use_differencing and st.session_state.diff_train is not None and st.session_state.diff_test is not None:
-                    try:
-                        forecast, model_metrics = cached_train_lstm_differenced(
-                            train_data_key, 
-                            test_data_key,
-                            **lstm_params
-                        )
-                        
-                        # 역변환 적용
-                        if forecast is not None:
-                            from backend.data_service import inverse_transform_forecast
-                            try:
-                                forecast = inverse_transform_forecast(forecast)
-                            except Exception as e:
-                                st.error(f"LSTM 예측 결과 역변환 중 오류: {e}")
-                                forecast = None
-                                model_metrics = None
-                    except Exception as e:
-                        st.error(f"차분 데이터로 LSTM 모델 학습 중 오류: {e}")
-                        # 원본 데이터로 학습 시도
-                        if st.session_state.train is not None and st.session_state.test is not None:
-                            st.warning("원본 데이터로 LSTM 모델 학습을 시도합니다.")
-                            train_key = hash(tuple(st.session_state.train.values.tolist()))
-                            test_key = hash(tuple(st.session_state.test.values.tolist()))
-                            forecast, model_metrics = cached_train_lstm(
-                                train_key, 
-                                test_key,
-                                **lstm_params
-                            )
-                        else:
-                            forecast = None
-                            model_metrics = None
+                # LSTM은 항상 원본 데이터로 학습 (차분 데이터 무시)
+                if st.session_state.train is not None and st.session_state.test is not None:
+                    train_key = hash(tuple(st.session_state.train.values.tolist()))
+                    test_key = hash(tuple(st.session_state.test.values.tolist()))
+                    forecast, model_metrics = cached_train_lstm(
+                        train_key, 
+                        test_key,
+                        **lstm_params
+                    )
                 else:
-                    # 원본 데이터로 학습
-                    if st.session_state.train is not None and st.session_state.test is not None:
-                        forecast, model_metrics = cached_train_lstm(
-                            hash(tuple(st.session_state.train.values.tolist())), 
-                            hash(tuple(st.session_state.test.values.tolist())),
-                            **lstm_params
-                        )
-                    else:
-                        st.error(f"LSTM 모델 학습을 위한 데이터가 없습니다.")
-                        forecast = None
-                        model_metrics = None
+                    st.error(f"LSTM 모델 학습을 위한 데이터가 없습니다.")
+                    forecast = None
+                    model_metrics = None
             
             # 유효한 결과만 저장
             if forecast is not None and model_metrics is not None:

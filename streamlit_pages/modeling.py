@@ -132,7 +132,7 @@ if st.session_state.models_trained and st.session_state.forecasts:
     
     # 차분 데이터 사용 여부 표시
     if st.session_state.use_differencing:
-        st.success(f"차분 데이터(일반 차분: {st.session_state.diff_order}차, 계절 차분: {st.session_state.seasonal_diff_order}차)를 사용하여 모델을 학습했습니다.")
+        st.success(f"ARIMA와 지수평활법 모델에만 차분 데이터(일반 차분: {st.session_state.diff_order}차, 계절 차분: {st.session_state.seasonal_diff_order}차)를 적용했습니다. LSTM과 Prophet 모델은 항상 원본 데이터를 사용합니다.")
     
     # 예측 결과 비교 시각화
     comparison_fig = visualize_forecast_comparison()
@@ -220,8 +220,9 @@ if st.session_state.models_trained and st.session_state.forecasts:
                 - **R² (Coefficient of Determination)**: 모델이 설명하는 분산의 비율. 1에 가까울수록 좋음.
                 """)
                 
-                # 차분 데이터 사용 시 추가 설명
-                if st.session_state.use_differencing:
+            # 차분 데이터 사용 시 추가 설명
+            if st.session_state.use_differencing:
+                if "ARIMA" in st.session_state.best_model or "지수평활법" in st.session_state.best_model or "ExpSmoothing" in st.session_state.best_model:
                     st.markdown("### 차분 데이터 사용 정보")
                     st.markdown(f"""
                     이 모델은 차분 데이터를 사용하여 학습되었습니다:
@@ -233,6 +234,8 @@ if st.session_state.models_trained and st.session_state.forecasts:
                     - 추세/계절성 제거: 기본 패턴을 제거하여 숨겨진 패턴 포착
                     - 예측 안정성: 장기 예측에서 더 안정적인 결과 제공
                     """)
+                elif "LSTM" in st.session_state.best_model or "Prophet" in st.session_state.best_model:
+                    st.info("LSTM과 Prophet 모델은 차분 설정과 관계없이 항상 원본 데이터를 사용합니다.")
     else:
         st.warning("최적 모델을 결정할 수 없습니다.")
 else:
