@@ -7,7 +7,7 @@ import pandas as pd
 from frontend.session_state import reset_model_results
 from frontend.components import render_model_selector
 from backend.model_service import get_model_factory, train_models
-from backend.data_service import prepare_train_test_data
+from backend.data_service import prepare_train_test_data, prepare_differenced_train_test_data
 from backend.visualization_service import (
     visualize_forecast_comparison, 
     visualize_metrics_comparison, 
@@ -29,6 +29,49 @@ elif st.session_state.series is None:
 # 모델 학습 섹션
 st.markdown("## 모델 설정 및 학습")
 
+# 차분 데이터 정보 표시
+if st.session_state.differenced_series is not None:
+    diff_info = f"일반 차분: {st.session_state.diff_order}차"
+    if st.session_state.seasonal_diff_order > 0:
+        diff_info += f", 계절 차분: {st.session_state.seasonal_diff_order}차 (주기: {st.session_state.period})"
+    
+    diff_col1, diff_col2 = st.columns([3, 1])
+    
+    with diff_col1:
+        # 차분 데이터 사용 여부
+        st.checkbox(
+            "차분 데이터 사용",
+            value=st.session_state.use_differencing,
+            key="use_differencing_model",
+            help=f"차분 데이터({diff_info})를 사용하여 모델을 학습합니다.",
+            on_change=lambda: setattr(st.session_state, 'use_differencing', st.session_state.use_differencing_model)
+        )
+        
+        if st.session_state.use_differencing:
+            st.success(f"차분 데이터({diff_info})를 사용하여 모델을 학습합니다.")
+            
+            # 차분 데이터를 사용하는 경우 확인
+            if st.session_state.diff_train is None or st.session_state.diff_test is None:
+                with st.spinner("차분 데이터 준비 중..."):
+                    prepare_differenced_train_test_data()
+    
+    with diff_col2:
+        # 차분 페이지로 이동 버튼
+        st.button(
+            "차분 설정 변경",
+            help="차분 분석 페이지로 이동하여 차분 설정을 변경합니다.",
+            on_click=lambda: st.rerun()
+        )
+        
+        # 차분 없이 원본 데이터 사용
+        if st.session_state.use_differencing:
+            if st.button("원본 데이터 사용", help="차분하지 않은 원본 데이터를 사용합니다."):
+                st.session_state.use_differencing = False
+                st.rerun()
+else:
+    # 차분 데이터가 없는 경우 안내
+    st.info("차분 분석을 수행하지 않았습니다. 정상성 문제가 있다면 '차분 분석' 페이지에서 차분을 적용해보세요.")
+
 # 모델 팩토리 가져오기
 model_factory = get_model_factory()
 
@@ -47,15 +90,26 @@ with col1:
             st.warning("최소한 하나의 모델을 선택해주세요.")
         else:
             # 훈련/테스트 데이터 준비
-            if prepare_train_test_data():
-                with st.spinner("모델을 학습 중입니다..."):
-                    st.session_state.selected_models = selected_models
-                    st.session_state.complexity = complexity
-                    # 모델 학습 실행
-                    train_models(selected_models, complexity)
-                    st.success("모델 학습 완료!")
+            if st.session_state.use_differencing:
+                if prepare_differenced_train_test_data():
+                    with st.spinner("모델을 차분 데이터로 학습 중입니다..."):
+                        st.session_state.selected_models = selected_models
+                        st.session_state.complexity = complexity
+                        # 모델 학습 실행
+                        train_models(selected_models, complexity)
+                        st.success("모델 학습 완료!")
+                else:
+                    st.error("차분 데이터 준비 중 오류가 발생했습니다.")
             else:
-                st.error("훈련/테스트 데이터 준비 중 오류가 발생했습니다.")
+                if prepare_train_test_data():
+                    with st.spinner("모델을 학습 중입니다..."):
+                        st.session_state.selected_models = selected_models
+                        st.session_state.complexity = complexity
+                        # 모델 학습 실행
+                        train_models(selected_models, complexity)
+                        st.success("모델 학습 완료!")
+                else:
+                    st.error("훈련/테스트 데이터 준비 중 오류가 발생했습니다.")
 
 with col2:
     if st.button("결과 초기화", use_container_width=True):
@@ -66,6 +120,10 @@ with col2:
 if st.session_state.models_trained and st.session_state.forecasts:
     st.markdown("---")
     st.subheader("📊 모델 예측 결과")
+    
+    # 차분 데이터 사용 여부 표시
+    if st.session_state.use_differencing:
+        st.success(f"차분 데이터(일반 차분: {st.session_state.diff_order}차, 계절 차분: {st.session_state.seasonal_diff_order}차)를 사용하여 모델을 학습했습니다.")
     
     # 예측 결과 비교 시각화
     comparison_fig = visualize_forecast_comparison()
@@ -152,6 +210,20 @@ if st.session_state.models_trained and st.session_state.forecasts:
                 - **MAPE (Mean Absolute Percentage Error)**: 실제값 대비 오차의 비율(%). 낮을수록 좋음.
                 - **R² (Coefficient of Determination)**: 모델이 설명하는 분산의 비율. 1에 가까울수록 좋음.
                 """)
+                
+                # 차분 데이터 사용 시 추가 설명
+                if st.session_state.use_differencing:
+                    st.markdown("### 차분 데이터 사용 정보")
+                    st.markdown(f"""
+                    이 모델은 차분 데이터를 사용하여 학습되었습니다:
+                    - 일반 차분: {st.session_state.diff_order}차
+                    - 계절 차분: {st.session_state.seasonal_diff_order}차 (주기: {st.session_state.period if st.session_state.seasonal_diff_order > 0 else '없음'})
+                    
+                    **차분 사용의 이점**:
+                    - 정상성 확보: 비정상 시계열을 정상화하여 모델 정확도 향상
+                    - 추세/계절성 제거: 기본 패턴을 제거하여 숨겨진 패턴 포착
+                    - 예측 안정성: 장기 예측에서 더 안정적인 결과 제공
+                    """)
     else:
         st.warning("최적 모델을 결정할 수 없습니다.")
 else:

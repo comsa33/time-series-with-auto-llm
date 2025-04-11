@@ -629,6 +629,99 @@ class TimeSeriesVisualizer(metaclass=Singleton):
         
         return fig
 
+    def plot_differencing_comparison(
+            self, 
+            original_series: pd.Series, 
+            differenced_series: pd.Series,
+            title: str = "차분 비교 (Differencing Comparison)",
+            **kwargs
+        ) -> go.Figure:
+        """
+        원본 시계열과 차분된 시계열 비교 시각화 (Plotly 버전).
+        
+        Args:
+            original_series: 원본 시계열 데이터
+            differenced_series: 차분된 시계열 데이터
+            title: 그래프 제목
+            
+        Returns:
+            Plotly Figure 객체
+        """
+        # 서브플롯 생성
+        fig = make_subplots(
+            rows=2, cols=1,
+            subplot_titles=(
+                '원본 시계열 (Original Time Series)',
+                '차분된 시계열 (Differenced Time Series)'
+            ),
+            shared_xaxes=True,
+            vertical_spacing=0.1
+        )
+        
+        # 원본 시계열 그래프
+        fig.add_trace(
+            go.Scatter(
+                x=original_series.index,
+                y=original_series.values,
+                mode='lines',
+                name='원본 데이터',
+                line=dict(color='blue', width=1.5)
+            ),
+            row=1, col=1
+        )
+        
+        # 차분된 시계열 그래프
+        fig.add_trace(
+            go.Scatter(
+                x=differenced_series.index,
+                y=differenced_series.values,
+                mode='lines',
+                name='차분된 데이터',
+                line=dict(color='red', width=1.5)
+            ),
+            row=2, col=1
+        )
+        
+        # 0 라인 추가 (차분 그래프에만)
+        fig.add_trace(
+            go.Scatter(
+                x=[differenced_series.index.min(), differenced_series.index.max()],
+                y=[0, 0],
+                mode='lines',
+                line=dict(color='black', width=1, dash='dash'),
+                showlegend=False
+            ),
+            row=2, col=1
+        )
+        
+        # 스타일 설정
+        fig.update_layout(
+            title=title,
+            height=600,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            margin=dict(l=10, r=10, t=50, b=10)
+        )
+        
+        # x축 및 y축 레이블
+        fig.update_xaxes(title_text='날짜 (Date)', row=2, col=1)
+        fig.update_yaxes(title_text='값 (Value)', row=1, col=1)
+        fig.update_yaxes(title_text='차분값 (Differenced Value)', row=2, col=1)
+        
+        # 날짜 형식 지정
+        fig.update_xaxes(
+            tickformat="%Y-%m-%d",
+            row=2, col=1
+        )
+        
+        return fig
+
+
 @st.cache_data(ttl=3600)
 def cached_plot_timeseries(data, title, xlabel, ylabel, color='#1f77b4'):
     """시계열 그래프 캐싱"""
@@ -664,3 +757,9 @@ def cached_plot_residuals(actual, predicted, title="Residual Analysis"):
     """잔차 분석 그래프 캐싱"""
     viz = TimeSeriesVisualizer()
     return viz.plot_residuals(actual, predicted, title=title)
+
+@st.cache_data(ttl=3600)
+def cached_plot_differencing_comparison(original_series, differenced_series, title="차분 비교 (Differencing Comparison)"):
+    """차분 비교 그래프 캐싱"""
+    viz = TimeSeriesVisualizer()
+    return viz.plot_differencing_comparison(original_series, differenced_series, title=title)

@@ -14,7 +14,10 @@ from utils.data_processor import (
     cached_train_test_split,
     cached_decompose_timeseries,
     cached_check_stationarity,
-    cached_get_acf_pacf
+    cached_get_acf_pacf,
+    cached_recommend_differencing,
+    cached_perform_differencing,
+    cached_apply_inverse_differencing
 )
 
 @st.cache_data(ttl=3600)
@@ -181,3 +184,150 @@ def safe_len(obj, default=10):
     if obj is not None:
         return len(obj)
     return default
+
+def analyze_differencing_need():
+    """
+    차분 필요성 분석을 수행합니다.
+    
+    Returns:
+        dict: 차분 추천 정보를 담은 딕셔너리
+    """
+    if st.session_state.series is not None:
+        try:
+            # 먼저 ACF, PACF 분석이 있는지 확인
+            if st.session_state.acf_values is None or st.session_state.pacf_values is None:
+                acf_values, pacf_values = analyze_acf_pacf()
+            else:
+                acf_values, pacf_values = st.session_state.acf_values, st.session_state.pacf_values
+                
+            # 차분 추천 실행
+            recommendation = cached_recommend_differencing(st.session_state.series, acf_values, pacf_values)
+            st.session_state.differencing_recommendation = recommendation
+            return recommendation
+        except Exception as e:
+            st.error(f"차분 필요성 분석 중 오류 발생: {str(e)}")
+            return None
+    return None
+
+def perform_differencing(diff_order=None, seasonal_diff_order=None, seasonal_period=None):
+    """
+    시계열 데이터에 차분을 적용합니다.
+    
+    Args:
+        diff_order: 일반 차분 차수 (기본값: None, 추천값 사용)
+        seasonal_diff_order: 계절 차분 차수 (기본값: None, 추천값 사용)
+        seasonal_period: 계절성 주기 (기본값: None, 추천값 사용)
+        
+    Returns:
+        차분된 시계열 데이터
+    """
+    if st.session_state.series is None:
+        return None
+        
+    try:
+        # 파라미터 설정
+        if diff_order is None:
+            if st.session_state.differencing_recommendation:
+                diff_order = st.session_state.differencing_recommendation['diff_order']
+            else:
+                diff_order = st.session_state.diff_order or 0
+                
+        if seasonal_diff_order is None:
+            if st.session_state.differencing_recommendation:
+                seasonal_diff_order = st.session_state.differencing_recommendation['seasonal_diff_order']
+            else:
+                seasonal_diff_order = st.session_state.seasonal_diff_order or 0
+                
+        if seasonal_period is None:
+            if st.session_state.differencing_recommendation and st.session_state.differencing_recommendation['seasonal_period']:
+                seasonal_period = st.session_state.differencing_recommendation['seasonal_period']
+            else:
+                seasonal_period = st.session_state.period
+        
+        # 세션 상태 업데이트
+        st.session_state.diff_order = diff_order
+        st.session_state.seasonal_diff_order = seasonal_diff_order
+        
+        # 차분 실행
+        differenced_series = cached_perform_differencing(
+            st.session_state.series, 
+            diff_order, 
+            seasonal_diff_order, 
+            seasonal_period
+        )
+        
+        st.session_state.differenced_series = differenced_series
+        return differenced_series
+        
+    except Exception as e:
+        st.error(f"차분 적용 중 오류 발생: {str(e)}")
+        return None
+
+def prepare_differenced_train_test_data(test_size=None):
+    """
+    차분된 시계열 데이터를 훈련/테스트 세트로 분할합니다.
+    
+    Args:
+        test_size: 테스트 데이터 비율 (기본값: None, 세션 상태 사용)
+        
+    Returns:
+        bool: 성공 여부
+    """
+    if test_size is None:
+        test_size = st.session_state.test_size
+        
+    if st.session_state.differenced_series is not None:
+        st.session_state.diff_train, st.session_state.diff_test = cached_train_test_split(
+            st.session_state.differenced_series, 
+            test_size
+        )
+        return True
+    return False
+
+def inverse_transform_forecast(forecast, original_series=None, diff_order=None, seasonal_diff_order=None, seasonal_period=None):
+    """
+    차분된 데이터로 예측한 결과를 원래 스케일로 변환합니다.
+    
+    Args:
+        forecast: 차분된 데이터에 대한 예측값
+        original_series: 원본 시계열 데이터 (기본값: None, 세션 상태 사용)
+        diff_order: 적용된 일반 차분 차수 (기본값: None, 세션 상태 사용)
+        seasonal_diff_order: 적용된 계절 차분 차수 (기본값: None, 세션 상태 사용)
+        seasonal_period: 적용된 계절성 주기 (기본값: None, 세션 상태 사용)
+        
+    Returns:
+        원래 스케일로 변환된 예측값
+    """
+    # 기본값 설정
+    if original_series is None:
+        original_series = st.session_state.train  # 훈련 데이터 사용
+        
+    if diff_order is None:
+        diff_order = st.session_state.diff_order
+        
+    if seasonal_diff_order is None:
+        seasonal_diff_order = st.session_state.seasonal_diff_order
+        
+    if seasonal_period is None:
+        if st.session_state.differencing_recommendation and st.session_state.differencing_recommendation['seasonal_period']:
+            seasonal_period = st.session_state.differencing_recommendation['seasonal_period']
+        else:
+            seasonal_period = st.session_state.period
+    
+    # 예측값을 시리즈로 변환 (인덱스 설정)
+    if not isinstance(forecast, pd.Series):
+        # 테스트 데이터 인덱스 사용
+        forecast_series = pd.Series(forecast, index=st.session_state.test.index)
+    else:
+        forecast_series = forecast
+    
+    # 역변환 수행
+    inverted_forecast = cached_apply_inverse_differencing(
+        forecast_series,
+        original_series,
+        diff_order,
+        seasonal_diff_order,
+        seasonal_period
+    )
+    
+    return inverted_forecast

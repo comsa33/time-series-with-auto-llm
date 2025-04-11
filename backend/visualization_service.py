@@ -9,7 +9,8 @@ from utils.visualizer import (
     cached_plot_acf_pacf,
     cached_plot_forecast_comparison,
     cached_plot_metrics_comparison,
-    cached_plot_residuals
+    cached_plot_residuals,
+    cached_plot_differencing_comparison
 )
 
 def visualize_timeseries():
@@ -115,4 +116,26 @@ def visualize_residuals(model_name=None):
         best_forecast = st.session_state.forecasts[model_name]
         residuals_fig = cached_plot_residuals(st.session_state.test, best_forecast)
         return residuals_fig
+    return None
+
+def visualize_differencing_comparison():
+    """
+    원본 시계열과 차분된 시계열 비교 시각화
+    
+    Returns:
+        plotly.graph_objects.Figure: 차분 비교 그래프
+    """
+    if st.session_state.series is not None and st.session_state.differenced_series is not None:
+        # 차분 정보 텍스트 생성
+        diff_info = f"일반 차분: {st.session_state.diff_order}차"
+        if st.session_state.seasonal_diff_order > 0:
+            diff_info += f", 계절 차분: {st.session_state.seasonal_diff_order}차 (주기: {st.session_state.period})"
+        
+        # 차분 시각화
+        diff_fig = cached_plot_differencing_comparison(
+            st.session_state.series,
+            st.session_state.differenced_series,
+            title=f"차분 비교 ({diff_info})"
+        )
+        return diff_fig
     return None

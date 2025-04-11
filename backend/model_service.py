@@ -1,8 +1,12 @@
 """
 모델 학습 및 예측 관련 서비스 모듈
 """
-import streamlit as st
 from typing import List, Dict, Any
+
+import streamlit as st
+import numpy as np
+import pandas as pd
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 from backend.data_service import safe_len
 from utils.parameter_utils import validate_model_parameters
@@ -149,6 +153,104 @@ def cached_train_exp_smoothing(train_data_key, test_data_key, seasonal_periods):
         st.error(f"지수평활법 모델 학습 오류: {e}")
         return None, None
 
+# 차분 데이터용 캐시 함수 추가
+@st.cache_data(ttl=3600)
+def cached_train_arima_differenced(train_data_key, test_data_key, seasonal, m, **kwargs):
+    """차분된 데이터로 ARIMA 모델 학습 결과를 캐싱합니다."""
+    try:
+        model_factory = get_model_factory()
+        if model_factory is None:
+            return None, None
+        
+        model = model_factory.get_model('arima')
+        forecast, metrics = model.fit_predict_evaluate(
+            st.session_state.diff_train, 
+            st.session_state.diff_test,
+            seasonal=seasonal,
+            m=m,
+            **kwargs
+        )
+        return forecast, metrics
+    except Exception as e:
+        st.error(f"차분 데이터로 ARIMA 모델 학습 오류: {e}")
+        return None, None
+
+@st.cache_data(ttl=3600)
+def cached_train_exp_smoothing_differenced(train_data_key, test_data_key, seasonal_periods):
+    """차분된 데이터로 지수평활법 모델 학습 결과를 캐싱합니다."""
+    try:
+        model_factory = get_model_factory()
+        if model_factory is None:
+            return None, None
+        
+        model = model_factory.get_model('exp_smoothing')
+        forecast, metrics = model.fit_predict_evaluate(
+            st.session_state.diff_train, 
+            st.session_state.diff_test,
+            seasonal_periods=seasonal_periods
+        )
+        return forecast, metrics
+    except Exception as e:
+        st.error(f"차분 데이터로 지수평활법 모델 학습 오류: {e}")
+        return None, None
+
+@st.cache_data(ttl=3600)
+def cached_train_lstm_differenced(train_data_key, test_data_key, **kwargs):
+    """차분된 데이터로 LSTM 모델 학습 결과를 캐싱합니다."""
+    try:
+        model_factory = get_model_factory()
+        if model_factory is None:
+            return None, None
+        
+        model = model_factory.get_model('lstm')
+        forecast, metrics = model.fit_predict_evaluate(
+            st.session_state.diff_train, 
+            st.session_state.diff_test,
+            **kwargs
+        )
+        return forecast, metrics
+    except Exception as e:
+        st.error(f"차분 데이터로 LSTM 모델 학습 오류: {e}")
+        return None, None
+
+def evaluate_prediction(actual: pd.Series, predicted: np.ndarray) -> Dict[str, float]:
+    """
+    예측 결과를 평가합니다.
+    
+    Args:
+        actual: 실제 값
+        predicted: 예측 값
+        
+    Returns:
+        성능 지표 딕셔너리
+    """
+    
+    # 길이 맞춤
+    min_len = min(len(actual), len(predicted))
+    actual = actual.iloc[:min_len]
+    predicted = predicted[:min_len]
+    
+    # 성능 지표 계산
+    mse = mean_squared_error(actual, predicted)
+    rmse = np.sqrt(mse)
+    mae = mean_absolute_error(actual, predicted)
+    r2 = r2_score(actual, predicted)
+    
+    # MAPE 계산 (실제값이 0이 아닌 경우만)
+    mask = actual != 0
+    if mask.any():
+        mape = np.mean(np.abs((actual[mask] - predicted[mask]) / actual[mask])) * 100
+    else:
+        mape = np.nan
+    
+    return {
+        'MSE': mse,
+        'RMSE': rmse,
+        'MAE': mae,
+        'R^2': r2,
+        'MAPE': mape
+    }
+
 def train_models(selected_models, complexity):
     """
     선택된 모델 학습 및 예측 수행
@@ -209,8 +311,21 @@ def train_models(selected_models, complexity):
         }
     
     # 데이터 키 생성 (캐싱용)
-    train_data_key = hash(tuple(st.session_state.train.values.tolist()))
-    test_data_key = hash(tuple(st.session_state.test.values.tolist()))
+    if st.session_state.use_differencing:
+        # 차분 데이터가 없으면 생성
+        if st.session_state.differenced_series is None:
+            from backend.data_service import perform_differencing
+            perform_differencing()
+            
+        if st.session_state.diff_train is None or st.session_state.diff_test is None:
+            from backend.data_service import prepare_differenced_train_test_data
+            prepare_differenced_train_test_data()
+            
+        train_data_key = hash(tuple(st.session_state.diff_train.values.tolist()))
+        test_data_key = hash(tuple(st.session_state.diff_test.values.tolist()))
+    else:
+        train_data_key = hash(tuple(st.session_state.train.values.tolist()))
+        test_data_key = hash(tuple(st.session_state.test.values.tolist()))
     
     # 진행 상황 표시
     progress_bar = st.progress(0)
@@ -243,13 +358,38 @@ def train_models(selected_models, complexity):
                     'm': st.session_state.period,
                     **arima_params
                 }
-                forecast, model_metrics = cached_train_arima(
-                    train_data_key, 
-                    test_data_key,
-                    seasonal=True,
-                    m=st.session_state.period,
-                    **arima_params
-                )
+                
+                # 차분 데이터 사용 여부에 따라 다른 함수 호출
+                if st.session_state.use_differencing:
+                    # ARIMA 모델은 차분 기능을 내장하고 있으므로,
+                    # 차분을 이미 했다면 차수를 줄일 수 있음
+                    modified_arima_params = arima_params.copy()
+                    if 'order' in modified_arima_params:
+                        p, d, q = modified_arima_params['order']
+                        # 이미 차분을 했으므로 d를 줄임
+                        modified_arima_params['order'] = (p, max(0, d - st.session_state.diff_order), q)
+                    
+                    forecast, model_metrics = cached_train_arima_differenced(
+                        train_data_key, 
+                        test_data_key,
+                        seasonal=True,
+                        m=st.session_state.period,
+                        **modified_arima_params
+                    )
+                    
+                    # 역변환 적용
+                    if forecast is not None:
+                        from backend.data_service import inverse_transform_forecast
+                        forecast = inverse_transform_forecast(forecast)
+                else:
+                    forecast, model_metrics = cached_train_arima(
+                        train_data_key, 
+                        test_data_key,
+                        seasonal=True,
+                        m=st.session_state.period,
+                        **arima_params
+                    )
+                    
             elif model_type == 'exp_smoothing':
                 # 파라미터 저장
                 st.session_state.model_params[model_type] = {
@@ -259,11 +399,26 @@ def train_models(selected_models, complexity):
                     'seasonal_periods': st.session_state.period,
                     'damped_trend': False
                 }
-                forecast, model_metrics = cached_train_exp_smoothing(
-                    train_data_key, 
-                    test_data_key,
-                    seasonal_periods=st.session_state.period
-                )
+                
+                # 차분 데이터 사용 여부에 따라 다른 함수 호출
+                if st.session_state.use_differencing:
+                    forecast, model_metrics = cached_train_exp_smoothing_differenced(
+                        train_data_key, 
+                        test_data_key,
+                        seasonal_periods=st.session_state.period
+                    )
+                    
+                    # 역변환 적용
+                    if forecast is not None:
+                        from backend.data_service import inverse_transform_forecast
+                        forecast = inverse_transform_forecast(forecast)
+                else:
+                    forecast, model_metrics = cached_train_exp_smoothing(
+                        train_data_key, 
+                        test_data_key,
+                        seasonal_periods=st.session_state.period
+                    )
+                    
             elif model_type == 'prophet':
                 # 파라미터 저장
                 st.session_state.model_params[model_type] = {
@@ -272,11 +427,14 @@ def train_models(selected_models, complexity):
                     'yearly_seasonality': prophet_params.get('yearly_seasonality', False),
                     'changepoint_prior_scale': prophet_params.get('changepoint_prior_scale', 0.05)
                 }
+                
+                # Prophet은 차분을 내장하고 있으므로 원본 데이터 사용이 권장됨
                 forecast, model_metrics = cached_train_prophet(
-                    train_data_key, 
-                    test_data_key,
+                    hash(tuple(st.session_state.train.values.tolist())), 
+                    hash(tuple(st.session_state.test.values.tolist())),
                     **prophet_params
                 )
+                
             elif model_type == 'lstm':
                 # 파라미터 저장
                 st.session_state.model_params[model_type] = {
@@ -284,22 +442,35 @@ def train_models(selected_models, complexity):
                     'lstm_units': lstm_params.get('lstm_units', [50]),
                     'epochs': lstm_params.get('epochs', 50)
                 }
-                forecast, model_metrics = cached_train_lstm(
-                    train_data_key, 
-                    test_data_key,
-                    **lstm_params
-                )
-            else:
-                # 일반적인 모델 처리
-                model_factory = get_model_factory()
-                model = model_factory.get_model(model_type)
-                forecast, model_metrics = model.fit_predict_evaluate(
-                    st.session_state.train, 
-                    st.session_state.test
-                )
+                
+                # LSTM은 스케일링이 내장되어 있으므로 차분 데이터도 사용 가능
+                if st.session_state.use_differencing:
+                    forecast, model_metrics = cached_train_lstm_differenced(
+                        train_data_key, 
+                        test_data_key,
+                        **lstm_params
+                    )
+                    
+                    # 역변환 적용
+                    if forecast is not None:
+                        from backend.data_service import inverse_transform_forecast
+                        forecast = inverse_transform_forecast(forecast)
+                else:
+                    forecast, model_metrics = cached_train_lstm(
+                        hash(tuple(st.session_state.train.values.tolist())), 
+                        hash(tuple(st.session_state.test.values.tolist())),
+                        **lstm_params
+                    )
             
             # 유효한 결과만 저장
             if forecast is not None and model_metrics is not None:
+                # 차분 데이터로 학습한 경우 메트릭 재계산 (원본 스케일로)
+                if st.session_state.use_differencing:
+                    model_name = model_metrics.get('name', model_type)
+                    metrics_from_test = evaluate_prediction(st.session_state.test, forecast)
+                    model_metrics.update(metrics_from_test)
+                    model_metrics['name'] = model_name  # 이름 복원
+                
                 forecasts[model_metrics.get('name', model_type)] = forecast
                 metrics[model_metrics.get('name', model_type)] = model_metrics
             

@@ -42,6 +42,7 @@ def main():
             st.Page("streamlit_pages/time-series-graph.py", title="📈 시계열 시각화"),
             st.Page("streamlit_pages/decomposition.py", title="🔍 시계열 분해"),
             st.Page("streamlit_pages/stationarity.py", title="📊 정상성 & ACF/PACF"),
+            st.Page("streamlit_pages/differencing.py", title="🔄 차분 분석"),
         ],
         "AI": [
             st.Page("streamlit_pages/modeling.py", title="🤖 모델 학습 및 예측"),

@@ -212,29 +212,182 @@ class DataProcessor(metaclass=Singleton):
         
         return result
 
+    def perform_differencing(self, series: pd.Series, diff_order: int = 1, seasonal_diff_order: int = 0, seasonal_period: int = None) -> pd.Series:
+        """
+        시계열 데이터에 차분을 적용합니다.
+        
+        Args:
+            series: 차분할 시계열 데이터
+            diff_order: 일반 차분 차수 (기본값: 1)
+            seasonal_diff_order: 계절 차분 차수 (기본값: 0)
+            seasonal_period: 계절성 주기 (None인 경우 계절 차분 미적용)
+            
+        Returns:
+            차분된 시계열 데이터
+        """
+        differenced_series = series.copy()
+        
+        # 계절 차분 적용 (seasonal_period가 있는 경우)
+        if seasonal_diff_order > 0 and seasonal_period is not None:
+            for _ in range(seasonal_diff_order):
+                differenced_series = differenced_series.diff(seasonal_period).dropna()
+        
+        # 일반 차분 적용
+        for _ in range(diff_order):
+            differenced_series = differenced_series.diff().dropna()
+        
+        return differenced_series
+
+    def recommend_differencing(self, series: pd.Series, acf_values: np.ndarray = None, pacf_values: np.ndarray = None) -> dict:
+        """
+        시계열 데이터의 ACF, PACF 및 정상성 검정 결과를 기반으로 차분 추천을 제공합니다.
+        
+        Args:
+            series: 시계열 데이터
+            acf_values: ACF 값 배열 (None인 경우 계산)
+            pacf_values: PACF 값 배열 (None인 경우 계산)
+            
+        Returns:
+            추천 정보를 담은 딕셔너리
+        """
+        # 정상성 검정
+        stationarity_result = self.check_stationarity(series)
+        is_stationary = stationarity_result['is_stationary']
+        
+        # ACF/PACF가 제공되지 않은 경우 계산
+        if acf_values is None or pacf_values is None:
+            acf_values, pacf_values = self.get_acf_pacf(series)
+        
+        # 초기 추천 사항
+        recommendation = {
+            'needs_differencing': not is_stationary,
+            'diff_order': 0,
+            'seasonal_diff_order': 0,
+            'seasonal_period': None,
+            'reason': []
+        }
+        
+        # 비정상이면 차분 추천
+        if not is_stationary:
+            recommendation['diff_order'] = 1
+            recommendation['reason'].append("시계열이 정상성을 만족하지 않습니다 (ADF 검정 p-value > 0.05).")
+        
+        # ACF 감소 속도가 느리면 차분 추천
+        slow_decay = all(acf_values[i] > 0.5 for i in range(1, min(5, len(acf_values))))
+        if slow_decay:
+            recommendation['diff_order'] = max(recommendation['diff_order'], 1)
+            recommendation['reason'].append("ACF가 천천히 감소하는 패턴을 보입니다 (추세 존재 가능성).")
+        
+        # 계절성 확인 (ACF에서 특정 lag에서 높은 값 발견)
+        for period in [24, 168, 720]:  # 일별(24시간), 주별(168시간), 월별(30일) 주기
+            if len(acf_values) > period and acf_values[period] > 0.3:
+                recommendation['seasonal_period'] = period
+                recommendation['seasonal_diff_order'] = 1
+                recommendation['reason'].append(f"{period}시간 주기의 계절성이 감지되었습니다.")
+                break
+        
+        return recommendation
+
+    def apply_inverse_differencing(self, 
+                                  differenced_series: pd.Series, 
+                                  original_series: pd.Series, 
+                                  diff_order: int = 1, 
+                                  seasonal_diff_order: int = 0, 
+                                  seasonal_period: int = None) -> pd.Series:
+        """
+        차분된 시계열 데이터를 원래 스케일로 되돌립니다.
+        
+        Args:
+            differenced_series: 차분된 시계열 데이터 (예측값)
+            original_series: 원본 시계열 데이터
+            diff_order: 적용된 일반 차분 차수
+            seasonal_diff_order: 적용된 계절 차분 차수
+            seasonal_period: 적용된 계절성 주기
+            
+        Returns:
+            원래 스케일로 변환된 시계열 데이터
+        """
+        # 예측값을 시리즈로 변환
+        if not isinstance(differenced_series, pd.Series):
+            if isinstance(differenced_series, np.ndarray):
+                # 테스트 데이터 인덱스 사용
+                differenced_series = pd.Series(differenced_series, index=original_series.index[-len(differenced_series):])
+        
+        # 마지막 값들 가져오기
+        last_values = original_series.iloc[-max(diff_order + seasonal_diff_order * (seasonal_period or 0), 1):]
+        
+        # 역변환할 시계열 초기화
+        inverted_series = differenced_series.copy()
+        
+        # 일반 차분 역변환
+        for d in range(diff_order):
+            # 초기값 설정 (원본 시리즈의 마지막 값)
+            cumsum_series = inverted_series.copy()
+            last_value = last_values.iloc[-1]
+            
+            # 누적합 계산
+            cumsum_series = pd.Series([last_value] + list(inverted_series.values)).cumsum()[1:]
+            cumsum_series.index = inverted_series.index
+            
+            inverted_series = cumsum_series
+        
+        # 계절 차분 역변환 (있는 경우)
+        if seasonal_diff_order > 0 and seasonal_period is not None:
+            for _ in range(seasonal_diff_order):
+                # 원본 값에 계절 요소 추가
+                for i, date in enumerate(inverted_series.index):
+                    seasonal_idx = date - pd.Timedelta(hours=seasonal_period)
+                    if seasonal_idx in original_series.index:
+                        inverted_series.iloc[i] += original_series.loc[seasonal_idx]
+        
+        return inverted_series
+
 
 # utils/data_processor.py 내의 함수를 직접 호출하는 대신 캐싱된 래퍼 함수 사용
 @st.cache_data(ttl=3600)
 def cached_preprocess_data(df, target_col, station):
+    """시계열 그래프 캐싱"""
     processor = DataProcessor()
     return processor.preprocess_data(df, target_col, station)
 
 @st.cache_data(ttl=3600)
 def cached_train_test_split(series, test_size):
+    """훈련/테스트 분할 캐싱"""
     processor = DataProcessor()
     return processor.train_test_split(series, test_size)
 
 @st.cache_data(ttl=3600)
 def cached_decompose_timeseries(series, period):
+    """분해 결과 캐싱"""
     processor = DataProcessor()
     return processor.decompose_timeseries(series, period)
 
 @st.cache_data(ttl=3600)
 def cached_check_stationarity(series):
+    """정상성 검정 결과 캐싱"""
     processor = DataProcessor()
     return processor.check_stationarity(series)
 
 @st.cache_data(ttl=3600)
 def cached_get_acf_pacf(series, nlags=40):
+    """ACF/PACF 결과 캐싱"""
     processor = DataProcessor()
     return processor.get_acf_pacf(series, nlags)
+
+@st.cache_data(ttl=3600)
+def cached_perform_differencing(series, diff_order=1, seasonal_diff_order=0, seasonal_period=None):
+    """차분 적용 결과 캐싱"""
+    processor = DataProcessor()
+    return processor.perform_differencing(series, diff_order, seasonal_diff_order, seasonal_period)
+
+@st.cache_data(ttl=3600)
+def cached_recommend_differencing(series, acf_values=None, pacf_values=None):
+    """차분 추천 결과 캐싱"""
+    processor = DataProcessor()
+    return processor.recommend_differencing(series, acf_values, pacf_values)
+
+@st.cache_data(ttl=3600)
+def cached_apply_inverse_differencing(differenced_series, original_series, diff_order=1, seasonal_diff_order=0, seasonal_period=None):
+    """차분 역변환 결과 캐싱"""
+    processor = DataProcessor()
+    return processor.apply_inverse_differencing(differenced_series, original_series, diff_order, seasonal_diff_order, seasonal_period)
