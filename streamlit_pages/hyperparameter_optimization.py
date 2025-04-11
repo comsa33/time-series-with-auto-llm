@@ -105,7 +105,12 @@ if 'hyperparameter_recommendations' in st.session_state and selected_model in st
                     # 정수 리스트의 경우 텍스트로 입력받고 변환
                     str_value = st.text_input(param, value=str(value).replace(' ', ''))
                     try:
-                        tuned_params[param] = eval(str_value)
+                        import ast
+                        try:
+                            tuned_params[param] = ast.literal_eval(str_value)
+                        except (ValueError, SyntaxError):
+                            st.warning(f"{param}: 유효한 리스트 형식이 아닙니다.")
+                            tuned_params[param] = value
                     except:
                         st.warning(f"{param}: 유효한 리스트 형식이 아닙니다.")
                         tuned_params[param] = value
