@@ -84,15 +84,34 @@ def cached_train_prophet(train_data_key, test_data_key, **kwargs):
         if model_factory is None:
             return None, None
         
+        # 데이터 확인 (st.session_state.diff_train, diff_test 또는 train, test)
+        train_data = None
+        test_data = None
+        
+        if hasattr(st.session_state, 'train') and st.session_state.train is not None:
+            train_data = st.session_state.train
+        elif hasattr(st.session_state, 'diff_train') and st.session_state.diff_train is not None:
+            train_data = st.session_state.diff_train
+            
+        if hasattr(st.session_state, 'test') and st.session_state.test is not None:
+            test_data = st.session_state.test
+        elif hasattr(st.session_state, 'diff_test') and st.session_state.diff_test is not None:
+            test_data = st.session_state.diff_test
+            
+        if train_data is None or test_data is None:
+            st.error("Prophet 모델을 위한 데이터가 없습니다.")
+            return None, None
+        
         model = model_factory.get_model('prophet')
+        # 모든 추가 파라미터를 model.fit_predict_evaluate로 전달
         forecast, metrics = model.fit_predict_evaluate(
-            st.session_state.train, 
-            st.session_state.test,
+            train_data, 
+            test_data,
             **kwargs  # prophet_params의 내용이 여기로 전달됨
         )
         return forecast, metrics
     except Exception as e:
-        st.error(f"Prophet 모델 학습 오류: {traceback.format_exc()}")
+        st.error(f"Prophet 모델 학습 오류: {e}")
         return None, None
 
 # LSTM 모델용 캐싱 함수
@@ -114,15 +133,33 @@ def cached_train_lstm(train_data_key, test_data_key, **kwargs):
         if model_factory is None:
             return None, None
         
+        # 데이터 확인
+        train_data = None
+        test_data = None
+        
+        if hasattr(st.session_state, 'train') and st.session_state.train is not None:
+            train_data = st.session_state.train
+        elif hasattr(st.session_state, 'diff_train') and st.session_state.diff_train is not None:
+            train_data = st.session_state.diff_train
+            
+        if hasattr(st.session_state, 'test') and st.session_state.test is not None:
+            test_data = st.session_state.test
+        elif hasattr(st.session_state, 'diff_test') and st.session_state.diff_test is not None:
+            test_data = st.session_state.diff_test
+            
+        if train_data is None or test_data is None:
+            st.error("LSTM 모델을 위한 데이터가 없습니다.")
+            return None, None
+        
         model = model_factory.get_model('lstm')
         forecast, metrics = model.fit_predict_evaluate(
-            st.session_state.train, 
-            st.session_state.test,
+            train_data, 
+            test_data,
             **kwargs  # 모든 lstm_params가 여기로 전달됨
         )
         return forecast, metrics
     except Exception as e:
-        st.error(f"LSTM 모델 학습 오류: {traceback.format_exc()}")
+        st.error(f"LSTM 모델 학습 오류: {e}")
         return None, None
 
 @st.cache_data(ttl=3600)
@@ -143,18 +180,87 @@ def cached_train_exp_smoothing(train_data_key, test_data_key, seasonal_periods):
         if model_factory is None:
             return None, None
         
+        # 데이터 확인
+        train_data = None
+        test_data = None
+        
+        if hasattr(st.session_state, 'train') and st.session_state.train is not None:
+            train_data = st.session_state.train
+        elif hasattr(st.session_state, 'diff_train') and st.session_state.diff_train is not None:
+            train_data = st.session_state.diff_train
+            
+        if hasattr(st.session_state, 'test') and st.session_state.test is not None:
+            test_data = st.session_state.test
+        elif hasattr(st.session_state, 'diff_test') and st.session_state.diff_test is not None:
+            test_data = st.session_state.diff_test
+            
+        if train_data is None or test_data is None:
+            st.error("지수평활법 모델을 위한 데이터가 없습니다.")
+            return None, None
+        
         model = model_factory.get_model('exp_smoothing')
         forecast, metrics = model.fit_predict_evaluate(
-            st.session_state.train, 
-            st.session_state.test,
+            train_data, 
+            test_data,
             seasonal_periods=seasonal_periods
         )
         return forecast, metrics
     except Exception as e:
-        st.error(f"지수평활법 모델 학습 오류: {traceback.format_exc()}")
+        st.error(f"지수평활법 모델 학습 오류: {e}")
         return None, None
 
-# 차분 데이터용 캐시 함수 추가
+@st.cache_data(ttl=3600)
+def cached_train_arima(train_data_key, test_data_key, seasonal, m, **kwargs):
+    """
+    ARIMA 모델 학습 결과를 캐싱합니다.
+    
+    Args:
+        train_data_key: 훈련 데이터 해시
+        test_data_key: 테스트 데이터 해시
+        seasonal: 계절성 모델 여부
+        m: 계절성 주기
+        **kwargs: 추가 파라미터
+        
+    Returns:
+        tuple: (예측값, 성능 지표)
+    """
+    try:
+        model_factory = get_model_factory()
+        if model_factory is None:
+            return None, None
+        
+        # 데이터 확인
+        train_data = None
+        test_data = None
+        
+        if hasattr(st.session_state, 'train') and st.session_state.train is not None:
+            train_data = st.session_state.train
+        elif hasattr(st.session_state, 'diff_train') and st.session_state.diff_train is not None:
+            train_data = st.session_state.diff_train
+            
+        if hasattr(st.session_state, 'test') and st.session_state.test is not None:
+            test_data = st.session_state.test
+        elif hasattr(st.session_state, 'diff_test') and st.session_state.diff_test is not None:
+            test_data = st.session_state.diff_test
+            
+        if train_data is None or test_data is None:
+            st.error("ARIMA 모델을 위한 데이터가 없습니다.")
+            return None, None
+        
+        model = model_factory.get_model('arima')
+        # 모든 추가 파라미터를 model.fit_predict_evaluate로 전달
+        forecast, metrics = model.fit_predict_evaluate(
+            train_data, 
+            test_data,
+            seasonal=seasonal,
+            m=m,
+            **kwargs  # 여기서 arima_params의 내용이 전달됨
+        )
+        return forecast, metrics
+    except Exception as e:
+        st.error(f"ARIMA 모델 학습 오류: {e}")
+        return None, None
+
 @st.cache_data(ttl=3600)
 def cached_train_arima_differenced(train_data_key, test_data_key, seasonal, m, **kwargs):
     """차분된 데이터로 ARIMA 모델 학습 결과를 캐싱합니다."""
@@ -163,17 +269,25 @@ def cached_train_arima_differenced(train_data_key, test_data_key, seasonal, m, *
         if model_factory is None:
             return None, None
         
+        # 데이터 확인
+        if hasattr(st.session_state, 'diff_train') and st.session_state.diff_train is not None and hasattr(st.session_state, 'diff_test') and st.session_state.diff_test is not None:
+            train_data = st.session_state.diff_train
+            test_data = st.session_state.diff_test
+        else:
+            st.error("차분된 ARIMA 모델을 위한 데이터가 없습니다.")
+            return None, None
+        
         model = model_factory.get_model('arima')
         forecast, metrics = model.fit_predict_evaluate(
-            st.session_state.diff_train, 
-            st.session_state.diff_test,
+            train_data, 
+            test_data,
             seasonal=seasonal,
             m=m,
             **kwargs
         )
         return forecast, metrics
     except Exception as e:
-        st.error(f"차분 데이터로 ARIMA 모델 학습 오류: {traceback.format_exc()}")
+        st.error(f"차분 데이터로 ARIMA 모델 학습 오류: {e}")
         return None, None
 
 @st.cache_data(ttl=3600)
@@ -184,15 +298,23 @@ def cached_train_exp_smoothing_differenced(train_data_key, test_data_key, season
         if model_factory is None:
             return None, None
         
+        # 데이터 확인
+        if hasattr(st.session_state, 'diff_train') and st.session_state.diff_train is not None and hasattr(st.session_state, 'diff_test') and st.session_state.diff_test is not None:
+            train_data = st.session_state.diff_train
+            test_data = st.session_state.diff_test
+        else:
+            st.error("차분된 지수평활법 모델을 위한 데이터가 없습니다.")
+            return None, None
+        
         model = model_factory.get_model('exp_smoothing')
         forecast, metrics = model.fit_predict_evaluate(
-            st.session_state.diff_train, 
-            st.session_state.diff_test,
+            train_data, 
+            test_data,
             seasonal_periods=seasonal_periods
         )
         return forecast, metrics
     except Exception as e:
-        st.error(f"차분 데이터로 지수평활법 모델 학습 오류: {traceback.format_exc()}")
+        st.error(f"차분 데이터로 지수평활법 모델 학습 오류: {e}")
         return None, None
 
 @st.cache_data(ttl=3600)
@@ -203,15 +325,23 @@ def cached_train_lstm_differenced(train_data_key, test_data_key, **kwargs):
         if model_factory is None:
             return None, None
         
+        # 데이터 확인
+        if hasattr(st.session_state, 'diff_train') and st.session_state.diff_train is not None and hasattr(st.session_state, 'diff_test') and st.session_state.diff_test is not None:
+            train_data = st.session_state.diff_train
+            test_data = st.session_state.diff_test
+        else:
+            st.error("차분된 LSTM 모델을 위한 데이터가 없습니다.")
+            return None, None
+        
         model = model_factory.get_model('lstm')
         forecast, metrics = model.fit_predict_evaluate(
-            st.session_state.diff_train, 
-            st.session_state.diff_test,
+            train_data, 
+            test_data,
             **kwargs
         )
         return forecast, metrics
     except Exception as e:
-        st.error(f"차분 데이터로 LSTM 모델 학습 오류: {traceback.format_exc()}")
+        st.error(f"차분 데이터로 LSTM 모델 학습 오류: {e}")
         return None, None
 
 def evaluate_prediction(actual: pd.Series, predicted: np.ndarray) -> Dict[str, float]:
@@ -225,6 +355,16 @@ def evaluate_prediction(actual: pd.Series, predicted: np.ndarray) -> Dict[str, f
     Returns:
         성능 지표 딕셔너리
     """
+    
+    # None 값 검사
+    if actual is None or predicted is None:
+        return {
+            'MSE': float('nan'),
+            'RMSE': float('nan'),
+            'MAE': float('nan'),
+            'R^2': float('nan'),
+            'MAPE': float('nan')
+        }
     
     # 길이 맞춤
     min_len = min(len(actual), len(predicted))
@@ -311,7 +451,7 @@ def train_models(selected_models, complexity):
             'changepoint_prior_scale': 0.05
         }
     
-    # 데이터 키 생성 (캐싱용)
+    # 데이터 준비 및 키 생성 (캐싱용)
     if st.session_state.use_differencing:
         # 차분 데이터가 없으면 생성
         if st.session_state.differenced_series is None:
@@ -321,12 +461,37 @@ def train_models(selected_models, complexity):
         if st.session_state.diff_train is None or st.session_state.diff_test is None:
             from backend.data_service import prepare_differenced_train_test_data
             prepare_differenced_train_test_data()
+        
+        # 모든 데이터 키 생성 (차분 및 원본 모두)
+        if st.session_state.diff_train is not None and st.session_state.diff_test is not None:
+            train_data_key = hash(tuple(st.session_state.diff_train.values.tolist()))
+            test_data_key = hash(tuple(st.session_state.diff_test.values.tolist()))
             
-        train_data_key = hash(tuple(st.session_state.diff_train.values.tolist()))
-        test_data_key = hash(tuple(st.session_state.diff_test.values.tolist()))
+            # 모델마다 다른 데이터를 사용할 수 있으므로 원본 데이터 키도 생성
+            if st.session_state.train is not None and st.session_state.test is not None:
+                original_train_key = hash(tuple(st.session_state.train.values.tolist()))
+                original_test_key = hash(tuple(st.session_state.test.values.tolist()))
+            else:
+                # 원본 데이터 없으면 차분 데이터 키로 대체
+                original_train_key = train_data_key
+                original_test_key = test_data_key
+        else:
+            st.error("차분 데이터를 준비할 수 없습니다. 원본 데이터를 사용합니다.")
+            st.session_state.use_differencing = False
+            if st.session_state.train is not None and st.session_state.test is not None:
+                train_data_key = hash(tuple(st.session_state.train.values.tolist()))
+                test_data_key = hash(tuple(st.session_state.test.values.tolist()))
+            else:
+                st.error("모델 학습에 필요한 데이터가 없습니다.")
+                return False
     else:
-        train_data_key = hash(tuple(st.session_state.train.values.tolist()))
-        test_data_key = hash(tuple(st.session_state.test.values.tolist()))
+        # 원본 데이터 학습 시
+        if st.session_state.train is not None and st.session_state.test is not None:
+            train_data_key = hash(tuple(st.session_state.train.values.tolist()))
+            test_data_key = hash(tuple(st.session_state.test.values.tolist()))
+        else:
+            st.error("모델 학습에 필요한 데이터가 없습니다.")
+            return False
     
     # 진행 상황 표시
     progress_bar = st.progress(0)
@@ -361,7 +526,7 @@ def train_models(selected_models, complexity):
                 }
                 
                 # 차분 데이터 사용 여부에 따라 다른 함수 호출
-                if st.session_state.use_differencing:
+                if st.session_state.use_differencing and st.session_state.diff_train is not None and st.session_state.diff_test is not None:
                     # ARIMA 모델은 차분 기능을 내장하고 있으므로,
                     # 차분을 이미 했다면 차수를 줄일 수 있음
                     modified_arima_params = arima_params.copy()
@@ -370,26 +535,111 @@ def train_models(selected_models, complexity):
                         # 이미 차분을 했으므로 d를 줄임
                         modified_arima_params['order'] = (p, max(0, d - st.session_state.diff_order), q)
                     
-                    forecast, model_metrics = cached_train_arima_differenced(
-                        train_data_key, 
-                        test_data_key,
-                        seasonal=True,
-                        m=st.session_state.period,
-                        **modified_arima_params
-                    )
-                    
-                    # 역변환 적용
-                    if forecast is not None:
-                        from backend.data_service import inverse_transform_forecast
-                        forecast = inverse_transform_forecast(forecast)
+                    try:
+                        forecast, model_metrics = cached_train_arima_differenced(
+                            train_data_key, 
+                            test_data_key,
+                            seasonal=True,
+                            m=st.session_state.period,
+                            **modified_arima_params
+                        )
+                        
+                        # 역변환 적용
+                        if forecast is not None:
+                            from backend.data_service import inverse_transform_forecast
+                            try:
+                                forecast = inverse_transform_forecast(forecast)
+                            except Exception as e:
+                                st.error(f"ARIMA 예측 결과 역변환 중 오류: {e}")
+                                forecast = None
+                                model_metrics = None
+                    except Exception as e:
+                        st.error(f"차분 데이터로 ARIMA 모델 학습 중 오류: {e}")
+                        # 원본 데이터로 학습 시도
+                        if st.session_state.train is not None and st.session_state.test is not None:
+                            st.warning("원본 데이터로 ARIMA 모델 학습을 시도합니다.")
+                            train_key = hash(tuple(st.session_state.train.values.tolist()))
+                            test_key = hash(tuple(st.session_state.test.values.tolist()))
+                            forecast, model_metrics = cached_train_arima(
+                                train_key, 
+                                test_key,
+                                seasonal=True,
+                                m=st.session_state.period,
+                                **arima_params
+                            )
+                        else:
+                            forecast = None
+                            model_metrics = None
                 else:
-                    forecast, model_metrics = cached_train_arima(
-                        train_data_key, 
-                        test_data_key,
-                        seasonal=True,
-                        m=st.session_state.period,
-                        **arima_params
-                    )
+                    # 원본 데이터로 학습
+                    if st.session_state.train is not None and st.session_state.test is not None:
+                        forecast, model_metrics = cached_train_arima(
+                            train_data_key, 
+                            test_data_key,
+                            seasonal=True,
+                            m=st.session_state.period,
+                            **arima_params
+                        )
+                    else:
+                        st.error(f"ARIMA 모델 학습을 위한 데이터가 없습니다.")
+                        forecast = None
+                        model_metrics = None
+                    
+            elif model_type == 'exp_smoothing':
+                # 파라미터 저장
+                st.session_state.model_params[model_type] = {
+                    'model_type': 'hw',
+                    'trend': 'add',
+                    'seasonal': 'add',
+                    'seasonal_periods': st.session_state.period,
+                    'damped_trend': False
+                }
+                
+                # 차분 데이터 사용 여부에 따라 다른 함수 호출
+                if st.session_state.use_differencing and st.session_state.diff_train is not None and st.session_state.diff_test is not None:
+                    try:
+                        forecast, model_metrics = cached_train_exp_smoothing_differenced(
+                            train_data_key, 
+                            test_data_key,
+                            seasonal_periods=st.session_state.period
+                        )
+                        
+                        # 역변환 적용
+                        if forecast is not None:
+                            from backend.data_service import inverse_transform_forecast
+                            try:
+                                forecast = inverse_transform_forecast(forecast)
+                            except Exception as e:
+                                st.error(f"지수평활법 예측 결과 역변환 중 오류: {e}")
+                                forecast = None
+                                model_metrics = None
+                    except Exception as e:
+                        st.error(f"차분 데이터로 지수평활법 모델 학습 중 오류: {e}")
+                        # 원본 데이터로 학습 시도
+                        if st.session_state.train is not None and st.session_state.test is not None:
+                            st.warning("원본 데이터로 지수평활법 모델 학습을 시도합니다.")
+                            train_key = hash(tuple(st.session_state.train.values.tolist()))
+                            test_key = hash(tuple(st.session_state.test.values.tolist()))
+                            forecast, model_metrics = cached_train_exp_smoothing(
+                                train_key, 
+                                test_key,
+                                seasonal_periods=st.session_state.period
+                            )
+                        else:
+                            forecast = None
+                            model_metrics = None
+                else:
+                    # 원본 데이터로 학습
+                    if st.session_state.train is not None and st.session_state.test is not None:
+                        forecast, model_metrics = cached_train_exp_smoothing(
+                            train_data_key, 
+                            test_data_key,
+                            seasonal_periods=st.session_state.period
+                        )
+                    else:
+                        st.error(f"지수평활법 모델 학습을 위한 데이터가 없습니다.")
+                        forecast = None
+                        model_metrics = None
                     
             elif model_type == 'exp_smoothing':
                 # 파라미터 저장
@@ -429,12 +679,34 @@ def train_models(selected_models, complexity):
                     'changepoint_prior_scale': prophet_params.get('changepoint_prior_scale', 0.05)
                 }
                 
-                # Prophet은 차분을 내장하고 있으므로 원본 데이터 사용이 권장됨
-                forecast, model_metrics = cached_train_prophet(
-                    hash(tuple(st.session_state.train.values.tolist())), 
-                    hash(tuple(st.session_state.test.values.tolist())),
-                    **prophet_params
-                )
+                # Prophet은 차분을 내장하고 있으므로 원본 데이터를 우선적으로 사용
+                # train과 test가 None이 아닌지 확인
+                if st.session_state.train is not None and st.session_state.test is not None:
+                    train_hash = hash(tuple(st.session_state.train.values.tolist()))
+                    test_hash = hash(tuple(st.session_state.test.values.tolist()))
+                    forecast, model_metrics = cached_train_prophet(
+                        train_hash, 
+                        test_hash,
+                        **prophet_params
+                    )
+                else:
+                    # 원본 데이터가 없는 경우, 차분 데이터로 대체
+                    st.warning("Prophet 모델은 원본 데이터 사용이 권장됩니다. 차분 데이터로 학습합니다.")
+                    # 차분 데이터의 해시 생성
+                    train_hash = hash(tuple(st.session_state.diff_train.values.tolist()))
+                    test_hash = hash(tuple(st.session_state.diff_test.values.tolist()))
+                    
+                    # Prophet 모델 학습
+                    forecast, model_metrics = cached_train_prophet(
+                        train_hash, 
+                        test_hash,
+                        **prophet_params
+                    )
+                    
+                    # 역변환 적용
+                    if forecast is not None:
+                        from backend.data_service import inverse_transform_forecast
+                        forecast = inverse_transform_forecast(forecast)
                 
             elif model_type == 'lstm':
                 # 파라미터 저장
@@ -445,31 +717,76 @@ def train_models(selected_models, complexity):
                 }
                 
                 # LSTM은 스케일링이 내장되어 있으므로 차분 데이터도 사용 가능
-                if st.session_state.use_differencing:
-                    forecast, model_metrics = cached_train_lstm_differenced(
-                        train_data_key, 
-                        test_data_key,
-                        **lstm_params
-                    )
-                    
-                    # 역변환 적용
-                    if forecast is not None:
-                        from backend.data_service import inverse_transform_forecast
-                        forecast = inverse_transform_forecast(forecast)
+                if st.session_state.use_differencing and st.session_state.diff_train is not None and st.session_state.diff_test is not None:
+                    try:
+                        forecast, model_metrics = cached_train_lstm_differenced(
+                            train_data_key, 
+                            test_data_key,
+                            **lstm_params
+                        )
+                        
+                        # 역변환 적용
+                        if forecast is not None:
+                            from backend.data_service import inverse_transform_forecast
+                            try:
+                                forecast = inverse_transform_forecast(forecast)
+                            except Exception as e:
+                                st.error(f"LSTM 예측 결과 역변환 중 오류: {e}")
+                                forecast = None
+                                model_metrics = None
+                    except Exception as e:
+                        st.error(f"차분 데이터로 LSTM 모델 학습 중 오류: {e}")
+                        # 원본 데이터로 학습 시도
+                        if st.session_state.train is not None and st.session_state.test is not None:
+                            st.warning("원본 데이터로 LSTM 모델 학습을 시도합니다.")
+                            train_key = hash(tuple(st.session_state.train.values.tolist()))
+                            test_key = hash(tuple(st.session_state.test.values.tolist()))
+                            forecast, model_metrics = cached_train_lstm(
+                                train_key, 
+                                test_key,
+                                **lstm_params
+                            )
+                        else:
+                            forecast = None
+                            model_metrics = None
                 else:
-                    forecast, model_metrics = cached_train_lstm(
-                        hash(tuple(st.session_state.train.values.tolist())), 
-                        hash(tuple(st.session_state.test.values.tolist())),
-                        **lstm_params
-                    )
+                    # 원본 데이터로 학습
+                    if st.session_state.train is not None and st.session_state.test is not None:
+                        forecast, model_metrics = cached_train_lstm(
+                            hash(tuple(st.session_state.train.values.tolist())), 
+                            hash(tuple(st.session_state.test.values.tolist())),
+                            **lstm_params
+                        )
+                    else:
+                        st.error(f"LSTM 모델 학습을 위한 데이터가 없습니다.")
+                        forecast = None
+                        model_metrics = None
             
             # 유효한 결과만 저장
             if forecast is not None and model_metrics is not None:
                 # 차분 데이터로 학습한 경우 메트릭 재계산 (원본 스케일로)
                 if st.session_state.use_differencing:
                     model_name = model_metrics.get('name', model_type)
-                    metrics_from_test = evaluate_prediction(st.session_state.test, forecast)
-                    model_metrics.update(metrics_from_test)
+                    
+                    # 차분 역변환 후 원본 test와 비교 (test가 있는 경우만)
+                    if hasattr(st.session_state, 'test') and st.session_state.test is not None:
+                        try:
+                            metrics_from_test = evaluate_prediction(st.session_state.test, forecast)
+                            model_metrics.update(metrics_from_test)
+                        except Exception as e:
+                            st.error(f"원본 스케일 메트릭 계산 중 오류: {e}")
+                            # 오류 발생 시 기존 메트릭 유지
+                            pass
+                    else:
+                        # 원본 test가 없으면 NaN 값으로 대체
+                        model_metrics.update({
+                            'MSE': float('nan'),
+                            'RMSE': float('nan'),
+                            'MAE': float('nan'),
+                            'R^2': float('nan'),
+                            'MAPE': float('nan')
+                        })
+                    
                     model_metrics['name'] = model_name  # 이름 복원
                 
                 forecasts[model_metrics.get('name', model_type)] = forecast

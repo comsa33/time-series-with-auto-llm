@@ -298,26 +298,42 @@ def inverse_transform_forecast(forecast, original_series=None, diff_order=None, 
     Returns:
         원래 스케일로 변환된 예측값
     """
-    # 기본값 설정
+    # 기본값 설정 (train/diff_train 모두 확인)
     if original_series is None:
-        original_series = st.session_state.train  # 훈련 데이터 사용
+        if hasattr(st.session_state, 'train') and st.session_state.train is not None:
+            original_series = st.session_state.train
+        elif hasattr(st.session_state, 'diff_train') and st.session_state.diff_train is not None:
+            # 차분된 데이터를 사용할 경우, 원본 시계열로 되돌리기 위해 원래 시계열 필요
+            original_series = st.session_state.series
+        else:
+            raise ValueError("원본 시계열 데이터를 찾을 수 없습니다.")
         
     if diff_order is None:
-        diff_order = st.session_state.diff_order
+        diff_order = st.session_state.diff_order if hasattr(st.session_state, 'diff_order') else 0
         
     if seasonal_diff_order is None:
-        seasonal_diff_order = st.session_state.seasonal_diff_order
+        seasonal_diff_order = st.session_state.seasonal_diff_order if hasattr(st.session_state, 'seasonal_diff_order') else 0
         
     if seasonal_period is None:
-        if st.session_state.differencing_recommendation and st.session_state.differencing_recommendation['seasonal_period']:
+        if hasattr(st.session_state, 'differencing_recommendation') and st.session_state.differencing_recommendation and st.session_state.differencing_recommendation.get('seasonal_period'):
             seasonal_period = st.session_state.differencing_recommendation['seasonal_period']
         else:
-            seasonal_period = st.session_state.period
+            seasonal_period = st.session_state.period if hasattr(st.session_state, 'period') else 24
     
     # 예측값을 시리즈로 변환 (인덱스 설정)
     if not isinstance(forecast, pd.Series):
-        # 테스트 데이터 인덱스 사용
-        forecast_series = pd.Series(forecast, index=st.session_state.test.index)
+        # 테스트 인덱스 확인 (test/diff_test 모두 고려)
+        if hasattr(st.session_state, 'test') and st.session_state.test is not None:
+            test_index = st.session_state.test.index
+        elif hasattr(st.session_state, 'diff_test') and st.session_state.diff_test is not None:
+            test_index = st.session_state.diff_test.index
+        else:
+            # 인덱스를 만들 수 없는 경우, 예측 길이만큼의 인덱스 생성
+            last_date = original_series.index[-1]
+            freq = pd.infer_freq(original_series.index)
+            test_index = pd.date_range(start=last_date, periods=len(forecast)+1, freq=freq)[1:]
+        
+        forecast_series = pd.Series(forecast, index=test_index)
     else:
         forecast_series = forecast
     

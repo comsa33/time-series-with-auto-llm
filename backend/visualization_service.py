@@ -72,14 +72,45 @@ def visualize_forecast_comparison(train_data=None, test_data=None, forecasts=Non
     test_data = test_data if test_data is not None else st.session_state.test
     forecasts = forecasts if forecasts is not None else st.session_state.forecasts
     
-    if (train_data is not None and test_data is not None and forecasts):
+    # 데이터 유효성 검사
+    if train_data is None or test_data is None:
+        st.error("시각화에 필요한 훈련/테스트 데이터가 없습니다.")
+        return None
+    
+    if not forecasts:
+        st.error("시각화할 예측 결과가 없습니다.")
+        return None
+    
+    # 유효한 예측 결과만 필터링
+    valid_forecasts = {}
+    for model_name, forecast in forecasts.items():
+        if forecast is not None and len(forecast) > 0:
+            # 예측 결과 길이가 테스트 데이터와 다른 경우 길이 조정
+            if len(forecast) != len(test_data):
+                min_len = min(len(forecast), len(test_data))
+                if min_len > 0:
+                    st.warning(f"{model_name} 모델의 예측 길이({len(forecast)})가 테스트 데이터 길이({len(test_data)})와 다릅니다. 최소 길이({min_len})로 조정합니다.")
+                    valid_forecasts[model_name] = forecast[:min_len]
+                else:
+                    st.warning(f"{model_name} 모델의 예측 결과를 시각화에서 제외합니다.")
+                    continue
+            else:
+                valid_forecasts[model_name] = forecast
+    
+    if not valid_forecasts:
+        st.error("유효한 예측 결과가 없어 시각화할 수 없습니다.")
+        return None
+    
+    try:
         comparison_fig = cached_plot_forecast_comparison(
             train_data, 
             test_data, 
-            forecasts
+            valid_forecasts
         )
         return comparison_fig
-    return None
+    except Exception as e:
+        st.error(f"예측 비교 시각화 중 오류 발생: {str(e)}")
+        return None
 
 def visualize_metrics_comparison(metrics=None):
     """
