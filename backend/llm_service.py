@@ -136,8 +136,38 @@ def run_llm_analysis():
                         model_results["models"][model_name]["metrics"][metric_name] = float(metric_value)
                 
                 # 예측값이 있는 경우만 통계 추가
-                if model_name in st.session_state.forecasts:
-                    forecast = st.session_state.forecasts[model_name]
+                # 모델명 매핑을 위한 사전 정의
+                model_mapping = {
+                    'arima': ['ARIMA', 'ARIMA/SARIMA', 'SARIMA'],
+                    'exp_smoothing': ['지수평활법', 'ExpSmoothing', 'Exponential Smoothing'],
+                    'prophet': ['Prophet'],
+                    'lstm': ['LSTM']
+                }
+
+                # forecast 키를 찾기 위한 함수
+                def find_matching_forecast_key(model_name):
+                    # 정확히 일치하는 경우
+                    if model_name in st.session_state.forecasts:
+                        return model_name
+                    
+                    # 매핑을 통한 검색
+                    for forecast_key in st.session_state.forecasts.keys():
+                        # 양방향 부분 문자열 검색
+                        if model_name in forecast_key or forecast_key in model_name:
+                            return forecast_key
+                        
+                        # 매핑 테이블을 통한 검색
+                        for key, aliases in model_mapping.items():
+                            if (key == model_name or model_name in aliases) and (key == forecast_key or forecast_key in aliases):
+                                return forecast_key
+                    
+                    return None
+
+                # 매칭되는 forecast 키 찾기
+                forecast_key = find_matching_forecast_key(model_name)
+
+                if forecast_key:
+                    forecast = st.session_state.forecasts[forecast_key]
                     if forecast is not None and len(forecast) > 0:
                         model_results["models"][model_name]["forecast_stats"] = {
                             "min": float(np.min(forecast)),
