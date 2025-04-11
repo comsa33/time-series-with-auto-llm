@@ -2,8 +2,10 @@
 모델 학습 및 예측 관련 서비스 모듈
 """
 import streamlit as st
+from typing import List, Dict, Any
 
 from backend.data_service import safe_len
+from utils.parameter_utils import validate_model_parameters
 
 # 모델 팩토리 동적 로드
 @st.cache_resource
@@ -289,4 +291,57 @@ def train_models(selected_models, complexity):
         return True
     else:
         st.error("모델 학습 중 오류가 발생했습니다.")
+        return False
+
+
+# backend/model_service.py 확장
+def train_models_with_params(selected_models: List[str], tuned_params: Dict[str, Any], prefix: str = "") -> bool:
+    """
+    조정된 파라미터로 모델 학습 및 예측 수행
+    """
+    # 데이터 준비 및 캐싱 키 생성
+    train_data_key = hash(tuple(st.session_state.train.values.tolist()))
+    test_data_key = hash(tuple(st.session_state.test.values.tolist()))
+    
+    # 진행 상황 표시
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    # 결과 저장용 변수
+    tuned_forecasts = {}
+    tuned_metrics = {}
+    
+    # 각 모델 학습 및 예측
+    for i, model_type in enumerate(selected_models):
+        tuned_model_name = f"{prefix}{model_type}"
+        status_text.text(f"{tuned_model_name} 모델 학습 중...")
+        
+        try:
+            # 모델 인스턴스 생성 및 학습
+            model = get_model_factory().get_model(model_type, name=tuned_model_name)
+            valid_params = validate_model_parameters(model_type, tuned_params)
+            forecast, metrics = model.fit_predict_evaluate(
+                st.session_state.train, 
+                st.session_state.test,
+                **valid_params
+            )
+            
+            # 결과 저장
+            tuned_forecasts[tuned_model_name] = forecast
+            tuned_metrics[tuned_model_name] = metrics
+            
+            # 진행 상황 업데이트
+            progress_bar.progress((i + 1) / len(selected_models))
+            
+        except Exception as e:
+            st.error(f"{tuned_model_name} 모델 학습 중 오류 발생: {e}")
+    
+    # 모든 모델 학습 완료 후 결과 저장
+    if tuned_forecasts:
+        st.session_state.forecasts.update(tuned_forecasts)
+        st.session_state.metrics.update(tuned_metrics)
+        status_text.text("모든 모델 학습 완료!")
+        return True
+    else:
+        st.error("조정된 파라미터로 모델 학습 중 오류가 발생했습니다.")
         return False

@@ -3,6 +3,7 @@ Ollama LLM API 연동 모듈
 시계열 분석 결과를 LLM에 전달하여 분석 결과를 마크다운으로 받아옵니다.
 """
 import logging
+import traceback
 from typing import Dict, Any
 
 import json
@@ -77,7 +78,7 @@ class LLMConnector(metaclass=Singleton):
             return analysis_result
             
         except Exception as e:
-            logger.error(f"LLM API 호출 중 오류 발생: {e}")
+            logger.error(f"LLM API 호출 중 오류 발생: {e}\n{traceback.format_exc()}")
             return f"## 오류 발생\n\nLLM 분석 중 오류가 발생했습니다: {str(e)}"
     
     def analyze_time_series_stream(self, 
@@ -124,3 +125,59 @@ class LLMConnector(metaclass=Singleton):
         except Exception as e:
             logger.error(f"LLM 스트리밍 API 호출 중 오류 발생: {e}")
             return f"## 오류 발생\n\nLLM 분석 중 오류가 발생했습니다: {str(e)}"
+
+    def recommend_hyperparameters(self, 
+                            data_info: Dict[str, Any], 
+                            model_info: Dict[str, Any],
+                            performance_metrics: Dict[str, Any],
+                            prompt_template: str) -> Dict[str, Any]:
+        """
+        시계열 모델의 하이퍼파라미터 추천을 LLM에 요청합니다.
+        """
+        try:
+            # 프롬프트 포맷팅
+            formatted_prompt = prompt_template.format(
+                data_info=json.dumps(data_info, ensure_ascii=False),
+                model_info=json.dumps(model_info, ensure_ascii=False),
+                performance_metrics=json.dumps(performance_metrics, ensure_ascii=False)
+            )
+            
+            # LLM API 호출
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a time series modeling expert. Provide hyperparameter recommendations in JSON format."},
+                    {"role": "user", "content": formatted_prompt}
+                ],
+                temperature=0.2
+            )
+            
+            # JSON 응답 파싱 및 반환
+            recommendation_result = response.choices[0].message.content
+            return self._parse_json_response(recommendation_result)
+                
+        except Exception as e:
+            logger.error(f"하이퍼파라미터 추천 API 호출 중 오류 발생: {traceback.format_exc()}")
+            return {"error": f"API 호출 오류: {str(e)}"}
+
+    def _parse_json_response(self, response_text: str) -> Dict[str, Any]:
+        """
+        LLM 응답에서 JSON 추출
+        """
+        try:
+            # JSON 문자열 추출 (```json과 ``` 사이의 내용)
+            import re
+            json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response_text)
+            if json_match:
+                json_str = json_match.group(1)
+            else:
+                # 일반 텍스트에서 찾기
+                json_str = response_text
+            
+            # JSON 파싱
+            return json.loads(json_str)
+        except Exception as e:
+            logger.error(f"JSON 파싱 오류: {e}")
+            logger.debug(f"파싱 시도한 문자열: {response_text}")
+            return {"error": f"JSON 파싱 오류: {str(e)}"}
+    

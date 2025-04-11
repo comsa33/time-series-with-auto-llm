@@ -123,3 +123,14 @@ class TimeSeriesModel(ABC):
         metrics = self.evaluate(test_data, forecast)
         
         return forecast, metrics
+
+    def get_params(self) -> Dict[str, Any]:
+        """
+        모델 파라미터를 반환합니다.
+        
+        Returns:
+            모델 파라미터 딕셔너리
+        """
+        # 기본적으로 빈 딕셔너리 반환
+        # 각 하위 클래스에서 이 메서드를 오버라이드해야 함
+        return {}

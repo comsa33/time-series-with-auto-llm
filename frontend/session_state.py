@@ -68,6 +68,13 @@ def initialize_session_state():
     if 'llm_analysis' not in st.session_state:
         st.session_state.llm_analysis = None
 
+    # 하이퍼파라미터 최적화 관련 변수
+    if 'hyperparameter_recommendations' not in st.session_state:
+        st.session_state.hyperparameter_recommendations = {}
+    if 'optimization_history' not in st.session_state:
+        st.session_state.optimization_history = {}
+
+
 def reset_model_results():
     """
     모델 결과 관련 세션 상태 초기화

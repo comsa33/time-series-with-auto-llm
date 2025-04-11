@@ -54,33 +54,46 @@ def visualize_acf_pacf():
         return acf_pacf_fig
     return None
 
-def visualize_forecast_comparison():
+def visualize_forecast_comparison(train_data=None, test_data=None, forecasts=None):
     """
     예측 결과 비교 시각화
+    
+    Args:
+        train_data: 훈련 데이터 (기본값: None, 세션 상태 사용)
+        test_data: 테스트 데이터 (기본값: None, 세션 상태 사용)
+        forecasts: 예측 결과 딕셔너리 (기본값: None, 세션 상태 사용)
     
     Returns:
         plotly.graph_objects.Figure: 예측 비교 그래프
     """
-    if (st.session_state.train is not None and 
-        st.session_state.test is not None and 
-        st.session_state.forecasts):
+    # 매개변수가 없으면 세션 상태 사용
+    train_data = train_data if train_data is not None else st.session_state.train
+    test_data = test_data if test_data is not None else st.session_state.test
+    forecasts = forecasts if forecasts is not None else st.session_state.forecasts
+    
+    if (train_data is not None and test_data is not None and forecasts):
         comparison_fig = cached_plot_forecast_comparison(
-            st.session_state.train, 
-            st.session_state.test, 
-            st.session_state.forecasts
+            train_data, 
+            test_data, 
+            forecasts
         )
         return comparison_fig
     return None
 
-def visualize_metrics_comparison():
+def visualize_metrics_comparison(metrics=None):
     """
     성능 메트릭 비교 시각화
+    
+    Args:
+        metrics: 메트릭 딕셔너리 (기본값: None, 세션 상태 사용)
     
     Returns:
         plotly.graph_objects.Figure: 메트릭 비교 그래프
     """
-    if st.session_state.metrics:
-        metrics_fig = cached_plot_metrics_comparison(st.session_state.metrics)
+    metrics = metrics if metrics is not None else st.session_state.metrics
+    
+    if metrics:
+        metrics_fig = cached_plot_metrics_comparison(metrics)
         return metrics_fig
     return None
 

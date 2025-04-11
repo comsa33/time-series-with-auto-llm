@@ -33,10 +33,11 @@ def main():
     # 사이드바 렌더링
     initialize_sidebar()
 
+    # app.py
     pages = {
         "APP": [
             st.Page("streamlit_pages/introduction.py", title="📋 데이터 명세"),
-         ],
+        ],
         "ANALYSIS": [
             st.Page("streamlit_pages/time-series-graph.py", title="📈 시계열 시각화"),
             st.Page("streamlit_pages/decomposition.py", title="🔍 시계열 분해"),
@@ -44,6 +45,7 @@ def main():
         ],
         "AI": [
             st.Page("streamlit_pages/modeling.py", title="🤖 모델 학습 및 예측"),
+            st.Page("streamlit_pages/hyperparameter_optimization.py", title="🎯 하이퍼파라미터 최적화"),
             st.Page("streamlit_pages/llm_analysis.py", title="🧠 모델 결과 - LLM 분석"),
         ]
     }
