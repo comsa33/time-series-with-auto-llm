@@ -10,7 +10,14 @@ from utils.visualizer import (
     cached_plot_forecast_comparison,
     cached_plot_metrics_comparison,
     cached_plot_residuals,
-    cached_plot_differencing_comparison
+    cached_plot_differencing_comparison,
+    cached_plot_stationarity_comparison,
+    cached_plot_change_points,
+    cached_plot_segment_means,
+    cached_plot_correlation_heatmap,
+    cached_plot_granger_causality,
+    cached_plot_residual_acf,
+    cached_plot_volatility
 )
 
 def visualize_timeseries():
@@ -207,4 +214,122 @@ def visualize_differencing_comparison():
             title=f"차분 비교 ({diff_info})"
         )
         return diff_fig
+    return None
+
+def visualize_stationarity_comparison():
+    """
+    ADF와 KPSS 정상성 검정 결과 비교 시각화
+    
+    Returns:
+        plotly.graph_objects.Figure: 정상성 비교 그래프
+    """
+    if (hasattr(st.session_state, 'stationarity_result') and 
+        hasattr(st.session_state, 'kpss_result')):
+        fig = cached_plot_stationarity_comparison(
+            st.session_state.stationarity_result,
+            st.session_state.kpss_result,
+            target_name=st.session_state.selected_target
+        )
+        return fig
+    return None
+
+def visualize_change_points():
+    """
+    구조적 변화점 시각화
+    
+    Returns:
+        plotly.graph_objects.Figure: 변화점 그래프
+    """
+    if (st.session_state.series is not None and 
+        hasattr(st.session_state, 'change_points_result')):
+        title = f"{st.session_state.selected_target} 시계열 데이터의 구조적 변화점"
+        fig = cached_plot_change_points(
+            st.session_state.series,
+            st.session_state.change_points_result,
+            title=title
+        )
+        return fig
+    return None
+
+def visualize_segment_means():
+    """
+    세그먼트별 평균값 시각화
+    
+    Returns:
+        plotly.graph_objects.Figure: 세그먼트 평균값 그래프
+    """
+    if (st.session_state.series is not None and 
+        hasattr(st.session_state, 'change_points_result')):
+        title = f"{st.session_state.selected_target} 세그먼트별 평균값"
+        fig = cached_plot_segment_means(
+            st.session_state.series,
+            st.session_state.change_points_result,
+            title=title
+        )
+        return fig
+    return None
+
+def visualize_correlation_heatmap(data):
+    """
+    변수 간 상관관계 히트맵 시각화
+    
+    Args:
+        data: 상관관계를 계산할 데이터프레임
+        
+    Returns:
+        plotly.graph_objects.Figure: 상관관계 히트맵
+    """
+    if data is not None and not data.empty:
+        corr_matrix = data.corr()
+        fig = cached_plot_correlation_heatmap(corr_matrix)
+        return fig
+    return None
+
+def visualize_granger_causality(lags, p_values, cause_var, effect_var):
+    """
+    Granger 인과성 검정 결과 시각화
+    
+    Args:
+        lags: 시차 목록
+        p_values: 각 시차별 p값
+        cause_var: 원인 변수명
+        effect_var: 결과 변수명
+        
+    Returns:
+        plotly.graph_objects.Figure: 인과성 그래프
+    """
+    fig = cached_plot_granger_causality(lags, p_values, cause_var, effect_var)
+    return fig
+
+def visualize_residual_acf(residuals, max_lags=20):
+    """
+    모델 잔차의 자기상관함수 시각화
+    
+    Args:
+        residuals: 모델 잔차
+        max_lags: 최대 시차
+        
+    Returns:
+        plotly.graph_objects.Figure: 잔차 ACF 그래프
+    """
+    fig = cached_plot_residual_acf(residuals, max_lags)
+    return fig
+
+def visualize_volatility():
+    """
+    시계열 데이터의 변동성 시각화
+    
+    Returns:
+        plotly.graph_objects.Figure: 변동성 그래프
+    """
+    if (st.session_state.series is not None and 
+        hasattr(st.session_state, 'volatility_result')):
+        volatility = st.session_state.volatility_result['volatility']
+        title = f"{st.session_state.selected_target}의 시계열 데이터와 조건부 변동성"
+        fig = cached_plot_volatility(
+            st.session_state.series,
+            volatility,
+            title=title
+        )
+        return fig
     return None

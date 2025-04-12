@@ -7,11 +7,16 @@ import pandas as pd
 from frontend.session_state import reset_model_results
 from frontend.components import render_model_selector
 from backend.model_service import get_model_factory, train_models
-from backend.data_service import prepare_train_test_data, prepare_differenced_train_test_data
+from backend.data_service import (
+    prepare_train_test_data,
+    prepare_differenced_train_test_data,
+    perform_ljung_box_test
+)
 from backend.visualization_service import (
     visualize_forecast_comparison, 
     visualize_metrics_comparison, 
-    visualize_residuals
+    visualize_residuals,
+    visualize_residual_acf
 )
 
 # 페이지 제목
@@ -179,6 +184,34 @@ if st.session_state.models_trained and st.session_state.forecasts:
                 else:
                     st.error("잔차 분석 시각화에 실패했습니다.")
                 
+                best_forecast = st.session_state.forecasts[st.session_state.best_model]
+                actual = st.session_state.test
+                
+                # 길이 맞춤
+                min_len = min(len(actual), len(best_forecast))
+                actual_values = actual.iloc[:min_len]
+                predicted_values = best_forecast[:min_len]
+                
+                # 잔차 계산
+                residuals = actual_values - predicted_values
+                
+                # Ljung-Box 테스트 수행
+                lb_result = perform_ljung_box_test(residuals)
+                
+                st.markdown("### 백색잡음 검정 (Ljung-Box Test)")
+                
+                if lb_result['is_white_noise']:
+                    st.success(f"Ljung-Box 테스트 결과: 잔차가 백색잡음입니다 (p-값: {lb_result['p_value']:.4f})")
+                    st.markdown("모델이 시계열의 패턴을 적절히 포착하고 있습니다.")
+                else:
+                    st.warning(f"Ljung-Box 테스트 결과: 잔차가 백색잡음이 아닙니다 (p-값: {lb_result['p_value']:.4f})")
+                    st.markdown("잔차에 여전히 패턴이 남아있어 모델 개선이 필요할 수 있습니다.")
+                
+                # 잔차 자기상관 시각화
+                acf_fig = visualize_residual_acf(residuals)
+                if acf_fig:
+                    st.plotly_chart(acf_fig, use_container_width=True, theme="streamlit")
+
                 # 모델 설명
                 st.markdown("### 모델 해석")
                 if "ARIMA" in st.session_state.best_model:

@@ -6,8 +6,11 @@ from typing import Tuple, Optional
 import streamlit as st
 import pandas as pd
 import numpy as np
+import ruptures as rpt
+from arch import arch_model
 from statsmodels.tsa.seasonal import seasonal_decompose
-from statsmodels.tsa.stattools import adfuller
+from statsmodels.tsa.stattools import adfuller, kpss, grangercausalitytests
+from statsmodels.stats.diagnostic import acorr_ljungbox
 
 from utils.singleton import Singleton
 from config.settings import app_config
@@ -342,6 +345,177 @@ class DataProcessor(metaclass=Singleton):
         
         return inverted_series
 
+    def perform_ljung_box_test(self, residuals, lags=None):
+        """
+        Ljung-Box 검정을 수행합니다.
+        
+        Args:
+            residuals: 모델 잔차
+            lags: 지연값 수 (기본값: None, min(10, n/5)으로 설정)
+        
+        Returns:
+            검정 결과 딕셔너리
+        """
+        
+        # lags가 None인 경우 자동 설정
+        if lags is None:
+            lags = min(10, len(residuals) // 5)
+        
+        # Ljung-Box 검정 수행
+        result = acorr_ljungbox(residuals, lags=[lags])
+        
+        # 결과 반환
+        return {
+            'statistic': float(result['lb_stat'].iloc[0]),
+            'p_value': float(result['lb_pvalue'].iloc[0]),
+            'lags': lags,
+            'is_white_noise': float(result['lb_pvalue'].iloc[0]) > 0.05
+        }
+
+    def check_stationarity_kpss(self, series: pd.Series) -> dict:
+        """
+        시계열 데이터의 정상성을 KPSS 테스트로 검정합니다.
+        
+        Args:
+            series: 검정할 시계열 데이터
+            
+        Returns:
+            검정 결과를 담은 딕셔너리
+        """
+        
+        # KPSS 검정 수행
+        result = kpss(series.dropna(), regression='c')
+        
+        # 결과 정리 (p-값 해석에 주의: ADF와 반대)
+        return {
+            'test_statistic': result[0],
+            'p_value': result[1],
+            'lags_used': result[2],
+            'critical_values': result[3],
+            'is_stationary': result[1] > 0.05  # KPSS는 p값이 크면 정상성 만족
+        }
+
+    def perform_granger_causality_test(self, x: pd.Series, y: pd.Series, max_lag: int = 12) -> dict:
+        """
+        두 시계열 간의 Granger 인과성 검정을 수행합니다.
+        
+        Args:
+            x: 원인 시계열
+            y: 결과 시계열
+            max_lag: 최대 지연값
+            
+        Returns:
+            검정 결과 딕셔너리
+        """
+        
+        # 두 시계열을 데이터프레임으로 결합
+        data = pd.concat([y, x], axis=1)
+        data.columns = ['y', 'x']
+        
+        # 결측치 제거
+        data = data.dropna()
+        
+        # Granger 인과성 검정 수행
+        results = {}
+        
+        for lag in range(1, max_lag + 1):
+            try:
+                test_result = grangercausalitytests(data, maxlag=lag, verbose=False)
+                results[lag] = {
+                    'ssr_ftest': {
+                        'statistic': float(test_result[lag][0]['ssr_ftest'][0]),
+                        'p_value': float(test_result[lag][0]['ssr_ftest'][1]),
+                        'is_causal': float(test_result[lag][0]['ssr_ftest'][1]) < 0.05
+                    },
+                    'ssr_chi2test': {
+                        'statistic': float(test_result[lag][0]['ssr_chi2test'][0]),
+                        'p_value': float(test_result[lag][0]['ssr_chi2test'][1]),
+                        'is_causal': float(test_result[lag][0]['ssr_chi2test'][1]) < 0.05
+                    }
+                }
+            except Exception as e:
+                results[lag] = {'error': str(e)}
+        
+        return results
+
+    def analyze_volatility(self, series: pd.Series) -> dict:
+        """
+        시계열 데이터의 변동성을 분석합니다.
+        
+        Args:
+            series: 분석할 시계열 데이터
+            
+        Returns:
+            변동성 분석 결과 딕셔너리
+        """
+        
+        # 결측치 제거
+        series_clean = series.dropna()
+        
+        # 수익률 계산 (금융 데이터 방식)
+        returns = 100 * series_clean.pct_change().dropna()
+        
+        # GARCH(1,1) 모델 적합
+        model = arch_model(returns, vol='GARCH', p=1, q=1)
+        model_fit = model.fit(disp='off')
+        
+        # 결과 정리
+        return {
+            'model_summary': model_fit.summary().as_text(),
+            'params': model_fit.params.to_dict(),
+            'volatility': model_fit.conditional_volatility.tolist(),
+            'aic': model_fit.aic,
+            'bic': model_fit.bic
+        }
+
+    # utils/data_processor.py에 추가
+    def detect_change_points(self, series: pd.Series, method: str = 'l2', min_size: int = 30) -> dict:
+        """
+        시계열 데이터의 구조적 변화점을 탐지합니다.
+        
+        Args:
+            series: 분석할 시계열 데이터
+            method: 변화점 탐지 방법 ('l1', 'l2', 'rbf', 'linear', 'normal', 'ar')
+            min_size: 최소 세그먼트 크기
+            
+        Returns:
+            변화점 탐지 결과 딕셔너리
+        """
+        # 결측치 제거
+        series_clean = series.dropna().values
+        
+        # 변화점 탐지 알고리즘
+        algo = rpt.Pelt(model=method, min_size=min_size)
+        
+        # 변화점 탐지 수행
+        algo.fit(series_clean)
+        change_points = algo.predict(pen=10)
+        
+        # 결과 정리
+        result = {
+            'change_points': change_points,
+            'change_dates': [series.index[cp] for cp in change_points if cp < len(series)],
+            'num_changes': len(change_points) - 1,  # 마지막은 시리즈 길이
+            'segments': []
+        }
+        
+        # 각 세그먼트 정보 추가
+        prev_cp = 0
+        for cp in change_points:
+            if cp >= len(series):
+                break
+                
+            segment_data = series.iloc[prev_cp:cp]
+            result['segments'].append({
+                'start_date': str(segment_data.index[0]),
+                'end_date': str(segment_data.index[-1]),
+                'length': len(segment_data),
+                'mean': float(segment_data.mean()),
+                'std': float(segment_data.std())
+            })
+            prev_cp = cp
+        
+        return result
 
 # utils/data_processor.py 내의 함수를 직접 호출하는 대신 캐싱된 래퍼 함수 사용
 @st.cache_data(ttl=3600)
@@ -391,3 +565,33 @@ def cached_apply_inverse_differencing(differenced_series, original_series, diff_
     """차분 역변환 결과 캐싱"""
     processor = DataProcessor()
     return processor.apply_inverse_differencing(differenced_series, original_series, diff_order, seasonal_diff_order, seasonal_period)
+
+@st.cache_data(ttl=3600)
+def cached_perform_ljung_box_test(residuals, lags=None):
+    """Ljung-Box 검정 결과 캐싱"""
+    processor = DataProcessor()
+    return processor.perform_ljung_box_test(residuals, lags)
+
+@st.cache_data(ttl=3600)
+def cached_check_stationarity_kpss(series):
+    """KPSS 정상성 검정 결과 캐싱"""
+    processor = DataProcessor()
+    return processor.check_stationarity_kpss(series)
+
+@st.cache_data(ttl=3600)
+def cached_perform_granger_causality_test(x, y, max_lag=12):
+    """Granger 인과성 검정 결과 캐싱"""
+    processor = DataProcessor()
+    return processor.perform_granger_causality_test(x, y, max_lag)
+
+@st.cache_data(ttl=3600)
+def cached_analyze_volatility(series):
+    """변동성 분석 결과 캐싱"""
+    processor = DataProcessor()
+    return processor.analyze_volatility(series)
+
+@st.cache_data(ttl=3600)
+def cached_detect_change_points(series, method='binary', min_size=30):
+    """변화점 탐지 결과 캐싱"""
+    processor = DataProcessor()
+    return processor.detect_change_points(series, method, min_size)

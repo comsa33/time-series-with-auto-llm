@@ -18,7 +18,12 @@ from utils.data_processor import (
     cached_get_acf_pacf,
     cached_recommend_differencing,
     cached_perform_differencing,
-    cached_apply_inverse_differencing
+    cached_apply_inverse_differencing,
+    cached_perform_ljung_box_test,
+    cached_check_stationarity_kpss,
+    cached_perform_granger_causality_test,
+    cached_analyze_volatility,
+    cached_detect_change_points
 )
 
 @st.cache_data(ttl=3600)
@@ -385,3 +390,61 @@ def inverse_transform_forecast(forecast, original_series=None, diff_order=None, 
                     # 길이 맞추기
                     return pd.Series(forecast[:min_len], index=test_index[:min_len])
         return forecast
+
+def perform_ljung_box_test(residuals, lags=None):
+    """
+    Ljung-Box 테스트를 수행합니다.
+    """
+    return cached_perform_ljung_box_test(residuals, lags)
+
+def check_stationarity_kpss():
+    """
+    KPSS 정상성 검정을 수행합니다.
+    """
+    if st.session_state.series is not None:
+        try:
+            kpss_result = cached_check_stationarity_kpss(st.session_state.series)
+            st.session_state.kpss_result = kpss_result
+            return kpss_result
+        except Exception as e:
+            st.error(f"KPSS 정상성 검정 중 오류 발생: {str(e)}")
+            return None
+    return None
+
+def perform_granger_causality_test(x_series, y_series, max_lag=12):
+    """
+    두 시계열 간의 Granger 인과성 검정을 수행합니다.
+    """
+    return cached_perform_granger_causality_test(x_series, y_series, max_lag)
+
+def analyze_volatility():
+    """
+    시계열 데이터의 변동성을 분석합니다.
+    """
+    if st.session_state.series is not None:
+        try:
+            volatility_result = cached_analyze_volatility(st.session_state.series)
+            st.session_state.volatility_result = volatility_result
+            return volatility_result
+        except Exception as e:
+            st.error(f"변동성 분석 중 오류 발생: {str(e)}")
+            return None
+    return None
+
+def detect_change_points(method='binary', min_size=30):
+    """
+    시계열 데이터의 구조적 변화점을 탐지합니다.
+    """
+    if st.session_state.series is not None:
+        try:
+            change_points_result = cached_detect_change_points(
+                st.session_state.series,
+                method=method,
+                min_size=min_size
+            )
+            st.session_state.change_points_result = change_points_result
+            return change_points_result
+        except Exception as e:
+            st.error(f"변화점 탐지 중 오류 발생: {str(e)}")
+            return None
+    return None

@@ -721,6 +721,415 @@ class TimeSeriesVisualizer(metaclass=Singleton):
         
         return fig
 
+    def plot_stationarity_comparison(
+            self,
+            adf_result: dict,
+            kpss_result: dict,
+            target_name: str = "시계열 데이터",
+            **kwargs
+        ) -> go.Figure:
+        """
+        ADF와 KPSS 정상성 검정 결과를 비교 시각화합니다.
+        
+        Args:
+            adf_result: ADF 검정 결과 딕셔너리
+            kpss_result: KPSS 검정 결과 딕셔너리
+            target_name: 대상 시계열 이름
+        
+        Returns:
+            plotly Figure 객체
+        """
+        # 사분면 차트 생성
+        fig = go.Figure()
+        
+        # 정상성 상태에 따른 영역 표시
+        fig.add_shape(
+            type="rect", x0=0, y0=0, x1=0.5, y1=0.5, 
+            fillcolor="rgba(255, 0, 0, 0.1)", line=dict(width=0)
+        )
+        fig.add_shape(
+            type="rect", x0=0.5, y0=0, x1=1, y1=0.5, 
+            fillcolor="rgba(255, 165, 0, 0.1)", line=dict(width=0)
+        )
+        fig.add_shape(
+            type="rect", x0=0, y0=0.5, x1=0.5, y1=1, 
+            fillcolor="rgba(255, 165, 0, 0.1)", line=dict(width=0)
+        )
+        fig.add_shape(
+            type="rect", x0=0.5, y0=0.5, x1=1, y1=1, 
+            fillcolor="rgba(0, 128, 0, 0.1)", line=dict(width=0)
+        )
+        
+        # 각 영역에 텍스트 추가
+        fig.add_annotation(x=0.25, y=0.25, text="비정상", showarrow=False)
+        fig.add_annotation(x=0.75, y=0.25, text="수준 정상", showarrow=False)
+        fig.add_annotation(x=0.25, y=0.75, text="추세 정상", showarrow=False)
+        fig.add_annotation(x=0.75, y=0.75, text="정상", showarrow=False)
+        
+        # 현재 데이터의 위치 표시
+        adf_stationary = adf_result.get('is_stationary', False)
+        kpss_stationary = kpss_result.get('is_stationary', False)
+        
+        marker_x = 0.75 if kpss_stationary else 0.25
+        marker_y = 0.75 if adf_stationary else 0.25
+        
+        fig.add_trace(go.Scatter(
+            x=[marker_x], y=[marker_y],
+            mode='markers',
+            marker=dict(
+                size=15,
+                color='blue',
+                symbol='circle'
+            ),
+            name=target_name
+        ))
+        
+        # 축 레이블과 제목 설정
+        fig.update_layout(
+            title="정상성 검정 종합 결과",
+            xaxis=dict(
+                title="KPSS 검정",
+                showticklabels=False,
+                range=[0, 1]
+            ),
+            yaxis=dict(
+                title="ADF 검정",
+                showticklabels=False,
+                range=[0, 1]
+            ),
+            height=400,
+            showlegend=True
+        )
+        
+        return fig
+
+    def plot_change_points(
+            self,
+            series: pd.Series,
+            change_points_result: dict,
+            title: str = "구조적 변화점 분석",
+            **kwargs
+        ) -> go.Figure:
+        """
+        시계열 데이터의 구조적 변화점을 시각화합니다.
+        
+        Args:
+            series: 원본 시계열 데이터
+            change_points_result: 변화점 탐지 결과 딕셔너리
+            title: 그래프 제목
+            
+        Returns:
+            plotly Figure 객체
+        """
+        # 원본 시계열 데이터 플롯
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=series.index,
+            y=series.values,
+            mode='lines',
+            name='원본 데이터',
+            line=dict(color='blue')
+        ))
+        
+        # 변화점에 수직선 추가
+        for date in change_points_result['change_dates']:
+            fig.add_shape(
+                type="line",
+                x0=date,
+                y0=min(series),
+                x1=date,
+                y1=max(series),
+                line=dict(color="red", width=2, dash="dash"),
+            )
+            # 변화점에 주석 추가
+            fig.add_annotation(
+                x=date,
+                y=max(series),
+                text=f"{date.strftime('%Y-%m-%d')}",
+                showarrow=True,
+                arrowhead=1,
+                ax=0,
+                ay=-40
+            )
+        
+        # 그래프 레이아웃 설정
+        fig.update_layout(
+            title=title,
+            xaxis_title="날짜",
+            yaxis_title="값",
+            height=500,
+            showlegend=True
+        )
+        
+        return fig
+
+    def plot_segment_means(
+            self,
+            series: pd.Series,
+            change_points_result: dict,
+            title: str = "세그먼트별 평균값",
+            **kwargs
+        ) -> go.Figure:
+        """
+        변화점으로 구분된 세그먼트별 평균값을 시각화합니다.
+        
+        Args:
+            series: 원본 시계열 데이터
+            change_points_result: 변화점 탐지 결과 딕셔너리
+            title: 그래프 제목
+            
+        Returns:
+            plotly Figure 객체
+        """
+        fig = go.Figure()
+        
+        # 원본 데이터 (반투명)
+        fig.add_trace(go.Scatter(
+            x=series.index,
+            y=series.values,
+            mode='lines',
+            name='원본 데이터',
+            line=dict(color='gray', width=1),
+            opacity=0.5
+        ))
+        
+        # 각 세그먼트의 평균값 수평선
+        for i, segment in enumerate(change_points_result['segments']):
+            start_date = pd.to_datetime(segment['start_date'])
+            end_date = pd.to_datetime(segment['end_date'])
+            mean_value = segment['mean']
+            
+            # 세그먼트 평균선
+            fig.add_trace(go.Scatter(
+                x=[start_date, end_date],
+                y=[mean_value, mean_value],
+                mode='lines',
+                name=f'세그먼트 {i+1} 평균',
+                line=dict(color='red', width=3)
+            ))
+            
+            # 세그먼트 라벨
+            mid_point = start_date + (end_date - start_date) / 2
+            fig.add_annotation(
+                x=mid_point,
+                y=mean_value * 1.05,
+                text=f"평균: {mean_value:.2f}",
+                showarrow=False,
+                font=dict(size=12)
+            )
+        
+        # 그래프 레이아웃 설정
+        fig.update_layout(
+            title=title,
+            xaxis_title="날짜",
+            yaxis_title="값",
+            height=500
+        )
+        
+        return fig
+
+    def plot_correlation_heatmap(
+            self,
+            correlation_matrix: pd.DataFrame,
+            title: str = "변수 간 상관관계 히트맵",
+            **kwargs
+        ) -> go.Figure:
+        """
+        변수 간 상관관계 히트맵을 시각화합니다.
+        
+        Args:
+            correlation_matrix: 상관관계 행렬
+            title: 그래프 제목
+            
+        Returns:
+            plotly Figure 객체
+        """
+        fig = go.Figure(data=go.Heatmap(
+            z=correlation_matrix.values,
+            x=correlation_matrix.columns,
+            y=correlation_matrix.index,
+            colorscale='RdBu_r',
+            zmin=-1, zmax=1,
+            text=np.around(correlation_matrix.values, decimals=2),
+            texttemplate='%{text:.2f}',
+            colorbar=dict(title='상관계수')
+        ))
+        
+        fig.update_layout(
+            title=title,
+            height=500,
+            width=700
+        )
+        
+        return fig
+
+    def plot_granger_causality(
+            self,
+            lags: list,
+            p_values: list,
+            cause_var: str,
+            effect_var: str,
+            significance_level: float = 0.05,
+            **kwargs
+        ) -> go.Figure:
+        """
+        Granger 인과성 검정 결과를 시각화합니다.
+        
+        Args:
+            lags: 시차 목록
+            p_values: 각 시차별 p값
+            cause_var: 원인 변수명
+            effect_var: 결과 변수명
+            significance_level: 유의수준
+            
+        Returns:
+            plotly Figure 객체
+        """
+        fig = go.Figure()
+        
+        # p-값 막대 그래프
+        fig.add_trace(go.Bar(
+            x=lags,
+            y=p_values,
+            marker_color=['green' if p < significance_level else 'red' for p in p_values],
+            name='p-값'
+        ))
+        
+        # 유의수준 선
+        fig.add_trace(go.Scatter(
+            x=[min(lags), max(lags)],
+            y=[significance_level, significance_level],
+            mode='lines',
+            line=dict(color='black', width=2, dash='dash'),
+            name=f'유의수준 {significance_level}'
+        ))
+        
+        # 레이아웃 설정
+        fig.update_layout(
+            title=f'{cause_var}에서 {effect_var}로의 Granger 인과성 p-값',
+            xaxis_title='시차(Lag)',
+            yaxis_title='p-값',
+            height=400
+        )
+        
+        return fig
+
+    def plot_residual_acf(
+            self,
+            residuals: np.ndarray,
+            max_lags: int = 20,
+            title: str = "잔차의 자기상관함수 (ACF)",
+            **kwargs
+        ) -> go.Figure:
+        """
+        모델 잔차의 자기상관함수(ACF)를 시각화합니다.
+        
+        Args:
+            residuals: 모델 잔차
+            max_lags: 최대 시차
+            title: 그래프 제목
+            
+        Returns:
+            plotly Figure 객체
+        """
+        from statsmodels.tsa.stattools import acf
+        
+        # ACF 값 계산
+        acf_values = acf(residuals, nlags=max_lags, fft=False)
+        lags = range(len(acf_values))
+        
+        # 신뢰 구간 계산 (95%)
+        confidence = 1.96 / np.sqrt(len(residuals))
+        
+        # ACF 시각화
+        fig = go.Figure()
+        
+        # ACF 막대 그래프
+        fig.add_trace(go.Bar(
+            x=lags,
+            y=acf_values,
+            name='ACF',
+            marker_color='blue'
+        ))
+        
+        # 신뢰 구간 선
+        fig.add_trace(go.Scatter(
+            x=[0, max(lags)],
+            y=[confidence, confidence],
+            mode='lines',
+            line=dict(color='red', width=2, dash='dash'),
+            name='95% 신뢰구간'
+        ))
+        
+        fig.add_trace(go.Scatter(
+            x=[0, max(lags)],
+            y=[-confidence, -confidence],
+            mode='lines',
+            line=dict(color='red', width=2, dash='dash'),
+            showlegend=False
+        ))
+        
+        # 레이아웃 설정
+        fig.update_layout(
+            title=title,
+            xaxis_title='시차(Lag)',
+            yaxis_title='자기상관계수',
+            height=400
+        )
+        
+        return fig
+
+    def plot_volatility(
+            self,
+            series: pd.Series,
+            volatility: list,
+            title: str = "시계열 데이터 및 변동성",
+            **kwargs
+        ) -> go.Figure:
+        """
+        시계열 데이터와 조건부 변동성을 함께 시각화합니다.
+        
+        Args:
+            series: 원본 시계열 데이터
+            volatility: 조건부 변동성 값 리스트
+            title: 그래프 제목
+            
+        Returns:
+            plotly Figure 객체
+        """
+        # 변동성 시각화할 날짜 계산
+        dates = series.index[-len(volatility):]
+        
+        fig = go.Figure()
+        
+        # 원본 시계열
+        fig.add_trace(go.Scatter(
+            x=series.index,
+            y=series.values,
+            mode='lines',
+            name='원본 데이터',
+            line=dict(color='blue')
+        ))
+        
+        # 조건부 변동성
+        fig.add_trace(go.Scatter(
+            x=dates,
+            y=volatility,
+            mode='lines',
+            name='조건부 변동성',
+            line=dict(color='red', width=2)
+        ))
+        
+        # 레이아웃 설정
+        fig.update_layout(
+            title=title,
+            xaxis_title="날짜",
+            yaxis_title="값",
+            height=500
+        )
+        
+        return fig
+
 
 @st.cache_data(ttl=3600)
 def cached_plot_timeseries(data, title, xlabel, ylabel, color='#1f77b4'):
@@ -776,3 +1185,45 @@ def cached_plot_differencing_comparison(original_series, differenced_series, tit
     """차분 비교 그래프 캐싱"""
     viz = TimeSeriesVisualizer()
     return viz.plot_differencing_comparison(original_series, differenced_series, title=title)
+
+@st.cache_data(ttl=3600)
+def cached_plot_stationarity_comparison(adf_result, kpss_result, target_name="시계열 데이터"):
+    """정상성 비교 그래프 캐싱"""
+    viz = TimeSeriesVisualizer()
+    return viz.plot_stationarity_comparison(adf_result, kpss_result, target_name=target_name)
+
+@st.cache_data(ttl=3600)
+def cached_plot_change_points(series, change_points_result, title="구조적 변화점 분석"):
+    """구조적 변화점 분석 그래프 캐싱"""
+    viz = TimeSeriesVisualizer()
+    return viz.plot_change_points(series, change_points_result, title=title)
+
+@st.cache_data(ttl=3600)
+def cached_plot_segment_means(series, change_points_result, title="세그먼트별 평균값"):
+    """세그먼트별 평균값 그래프 캐싱"""
+    viz = TimeSeriesVisualizer()
+    return viz.plot_segment_means(series, change_points_result, title=title)
+
+@st.cache_data(ttl=3600)
+def cached_plot_correlation_heatmap(correlation_matrix, title="변수 간 상관관계 히트맵"):
+    """상관관계 히트맵 그래프 캐싱"""
+    viz = TimeSeriesVisualizer()
+    return viz.plot_correlation_heatmap(correlation_matrix, title=title)
+
+@st.cache_data(ttl=3600)
+def cached_plot_granger_causality(lags, p_values, cause_var, effect_var, significance_level=0.05):
+    """Granger 인과성 그래프 캐싱"""
+    viz = TimeSeriesVisualizer()
+    return viz.plot_granger_causality(lags, p_values, cause_var, effect_var, significance_level=significance_level)
+
+@st.cache_data(ttl=3600)
+def cached_plot_residual_acf(residuals, max_lags=20, title="잔차의 자기상관함수 (ACF)"):
+    """잔차 ACF 그래프 캐싱"""
+    viz = TimeSeriesVisualizer()
+    return viz.plot_residual_acf(residuals, max_lags=max_lags, title=title)
+
+@st.cache_data(ttl=3600)
+def cached_plot_volatility(series, volatility, title="시계열 데이터 및 변동성"):
+    """변동성 그래프 캐싱"""
+    viz = TimeSeriesVisualizer()
+    return viz.plot_volatility(series, volatility, title=title)

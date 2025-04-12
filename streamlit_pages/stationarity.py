@@ -3,8 +3,8 @@
 """
 import streamlit as st
 
-from backend.data_service import analyze_stationarity, analyze_acf_pacf
-from backend.visualization_service import visualize_acf_pacf
+from backend.data_service import analyze_stationarity, analyze_acf_pacf, check_stationarity_kpss
+from backend.visualization_service import visualize_acf_pacf, visualize_stationarity_comparison
 
 # 페이지 제목
 st.title("🔍 정상성 & ACF/PACF 분석")
@@ -231,3 +231,83 @@ else:
             """)
     else:
         st.info("ACF/PACF 분석을 실행하여 결과를 확인하세요.")
+
+    # KPSS 정상성 검정 섹션 추가
+    st.markdown("---")
+    st.markdown("## KPSS 정상성 검정")
+    st.markdown("시계열 데이터의 정상성을 KPSS 테스트로 검정합니다. (ADF 테스트와 상호보완적)")
+
+    if st.button("KPSS 정상성 검정 실행", type="primary"):
+        with st.spinner("KPSS 정상성 검정 중..."):
+            # KPSS 정상성 검정 수행
+            kpss_result = check_stationarity_kpss()
+            
+            if kpss_result:
+                st.success("KPSS 정상성 검정이 완료되었습니다.")
+            else:
+                st.error("KPSS 정상성 검정 중 오류가 발생했습니다.")
+
+    # KPSS 검정 결과 표시
+    if hasattr(st.session_state, 'kpss_result') and st.session_state.kpss_result:
+        # 정상성 여부 먼저 큰 글씨로 표시
+        if st.session_state.kpss_result['is_stationary']:
+            st.success("### ✅ KPSS 테스트 결과: 시계열 데이터가 정상성을 만족합니다")
+            st.markdown("*KPSS 테스트에서는 p-값이 0.05보다 크면 정상성을 만족합니다 (ADF와 반대)*")
+        else:
+            st.warning("### ⚠️ KPSS 테스트 결과: 시계열 데이터가 정상성을 만족하지 않습니다")
+            st.markdown("*KPSS 테스트에서는 p-값이 0.05보다 작으면 정상성을 만족하지 않습니다 (ADF와 반대)*")
+        
+        # 메트릭 표시를 위한 2개 컬럼
+        metric_col1, metric_col2 = st.columns(2)
+        
+        # KPSS 통계량
+        test_stat = st.session_state.kpss_result['test_statistic']
+        critical_1pct = st.session_state.kpss_result['critical_values']['1%']
+        
+        # 시각화: KPSS에서는 통계량이 작을수록 좋음
+        metric_col1.metric(
+            label="KPSS 통계량",
+            value=f"{test_stat:.4f}",
+            delta=f"{test_stat - critical_1pct:.4f}",
+            delta_color="inverse",
+            help="KPSS 통계량이 임계값보다 작을수록 정상성 가능성이 높습니다",
+            border=True
+        )
+        
+        # p-값 (KPSS는 p-값이 클수록 정상)
+        p_value = st.session_state.kpss_result['p_value']
+        metric_col2.metric(
+            label="p-값",
+            value=f"{p_value:.4f}",
+            delta=f"{p_value - 0.05:.4f}",
+            delta_color="normal",  # KPSS는 p-값이 클수록 좋음
+            help="KPSS 테스트에서는 p-값이 0.05보다 크면 정상성을 만족합니다",
+            border=True
+        )
+
+        # ADF와 KPSS 결과 비교 (두 검정 결과가 모두 있는 경우)
+        if hasattr(st.session_state, 'stationarity_result') and hasattr(st.session_state, 'kpss_result'):
+            st.markdown("---")
+            st.markdown("## 📊 정상성 검정 종합 결과")
+            
+            adf_stationary = st.session_state.stationarity_result['is_stationary']
+            kpss_stationary = st.session_state.kpss_result['is_stationary']
+            
+            # 텍스트 결과 표시
+            if adf_stationary and kpss_stationary:
+                st.success("### ✅ ADF와 KPSS 모두 정상성을 만족합니다")
+                st.markdown("시계열이 정상성을 가지며, 차분 없이 모델링할 수 있습니다.")
+            elif not adf_stationary and not kpss_stationary:
+                st.error("### ❌ ADF와 KPSS 모두 정상성을 만족하지 않습니다")
+                st.markdown("시계열이 추세를 가지는 비정상 시계열입니다. 차분이 필요합니다.")
+            elif adf_stationary and not kpss_stationary:
+                st.warning("### ⚠️ ADF는 정상성을 만족하지만, KPSS는 만족하지 않습니다")
+                st.markdown("시계열이 결정적 추세를 가질 가능성이 있습니다. 선형 추세를 제거하는 것이 도움이 될 수 있습니다.")
+            else:  # not adf_stationary and kpss_stationary
+                st.warning("### ⚠️ ADF는 정상성을 만족하지 않지만, KPSS는 만족합니다")
+                st.markdown("시계열이 수준 정상성(level stationarity)을 가지지만 평균 회귀 특성이 약할 수 있습니다.")
+            
+            # 시각화 추가
+            comparison_fig = visualize_stationarity_comparison()
+            if comparison_fig:
+                st.plotly_chart(comparison_fig, use_container_width=True, theme="streamlit")
