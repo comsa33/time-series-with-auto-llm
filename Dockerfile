@@ -1,16 +1,15 @@
 # CUDA 베이스 이미지
-FROM nvidia/cuda:12.2.2-cudnn8-runtime-ubuntu22.04
+FROM nvidia/cuda:12.2.2-cudnn8-devel-ubuntu22.04
 
 # 비대화형 모드 설정
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Asia/Seoul
 
-# TensorFlow GPU 관련 환경변수 추가
-ENV CUDA_VISIBLE_DEVICES=0
-ENV TF_FORCE_GPU_ALLOW_GROWTH=true
-
 # 필요한 기본 패키지 설치
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    cuda-nvcc-12-2 \
+    cuda-cudart-dev-12-2 \
+    cuda-command-line-tools-12-2 \
     build-essential \
     libssl-dev \
     zlib1g-dev \
@@ -37,6 +36,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fontconfig-config \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+    # libdevice.10.bc 파일 위치 설정
+ENV XLA_FLAGS=--xla_gpu_cuda_data_dir=/usr/local/cuda-12.2
+ENV TF_CUDA_PATHS=/usr/local/cuda-12.2
+
+# TensorFlow와 CUDA 연동 최적화
+ENV CUDA_VISIBLE_DEVICES=0
+ENV TF_ENABLE_ONEDNN_OPTS=0
+ENV TF_GPU_ALLOCATOR=cuda_malloc_async
+ENV TF_FORCE_GPU_ALLOW_GROWTH=true
 
 # 한글 로케일 설정
 RUN sed -i -e 's/# ko_KR.UTF-8 UTF-8/ko_KR.UTF-8 UTF-8/' /etc/locale.gen && \
