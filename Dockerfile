@@ -37,7 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-    # libdevice.10.bc 파일 위치 설정
+# libdevice.10.bc 파일 위치 설정
 ENV XLA_FLAGS=--xla_gpu_cuda_data_dir=/usr/local/cuda-12.2
 ENV TF_CUDA_PATHS=/usr/local/cuda-12.2
 
@@ -102,9 +102,6 @@ RUN mkdir -p /app/data
 
 # 소스코드 복사
 COPY . .
-
-# app.py 수정 (GPU 활성화)
-RUN sed -i 's/os.environ\["CUDA_VISIBLE_DEVICES"\] = "-1"/os.environ\["CUDA_VISIBLE_DEVICES"\] = "0"/g' app.py
 
 # 포트 설정
 EXPOSE 8777
