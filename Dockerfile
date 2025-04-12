@@ -1,5 +1,8 @@
 # Python 3.10.16 기반 이미지 사용
-FROM python:3.10.16-slim
+FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
+
+# Python 3.10 설치
+RUN apt-get update && apt-get install -y python3.10 python3-pip
 
 # 작업 디렉토리 설정
 WORKDIR /app

@@ -4,13 +4,20 @@
 import os
 import warnings
 import streamlit as st
+import tensorflow as tf
 
 from config.settings import app_config
 from frontend.sidebar import initialize_sidebar
 from frontend.session_state import initialize_session_state
 
-# GPU 사용 비활성화 (CPU 모드만 사용)
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+# TensorFlow GPU 설정
+# GPU 사용 가능 여부 확인
+print("TensorFlow Version: ", tf.__version__)
+print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+if len(tf.config.list_physical_devices('GPU')) > 0:
+    print("GPU Available: ", tf.config.list_physical_devices('GPU'))
+else:
+    print("No GPU available, using CPU.")
 # TensorFlow 로그 레벨 조정
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
