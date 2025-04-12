@@ -10,7 +10,7 @@ from frontend.sidebar import initialize_sidebar
 from frontend.session_state import initialize_session_state
 
 # GPU 사용 비활성화 (CPU 모드만 사용)
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 # TensorFlow 로그 레벨 조정
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
