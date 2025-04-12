@@ -1036,7 +1036,7 @@ class TimeSeriesVisualizer(metaclass=Singleton):
         
         # ACF 값 계산
         acf_values = acf(residuals, nlags=max_lags, fft=False)
-        lags = range(len(acf_values))
+        lags = list(range(len(acf_values)))  # range 객체를 list로 변환
         
         # 신뢰 구간 계산 (95%)
         confidence = 1.96 / np.sqrt(len(residuals))

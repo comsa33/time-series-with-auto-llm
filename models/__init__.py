@@ -51,6 +51,13 @@ def get_available_models():
     except ImportError:
         available['LSTMModel'] = False
     
+    # 트랜스포머 모델 확인
+    try:
+        from models.transformer_model import TransformerModel, TF_AVAILABLE
+        available['TransformerModel'] = TF_AVAILABLE
+    except ImportError:
+        available['TransformerModel'] = False
+    
     # 모델 팩토리 확인
     try:
         from models.model_factory import ModelFactory

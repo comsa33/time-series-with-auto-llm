@@ -242,6 +242,14 @@ if st.session_state.models_trained and st.session_state.forecasts:
                     - Holt 지수평활법: 추세가 있는 데이터에 적합
                     - Holt-Winters 지수평활법: 추세와 계절성이 모두 있는 데이터에 적합
                     """)
+                elif "Transformer" in st.session_state.best_model:
+                    st.markdown("""
+                    **트랜스포머(Transformer) 모델**은 어텐션 메커니즘을 활용한 딥러닝 모델로, 시계열 데이터의 장거리 의존성을 효과적으로 포착합니다.
+                    - 셀프 어텐션 메커니즘으로 시퀀스 내 모든 요소 간의 관계를 동시에 고려
+                    - 병렬 처리가 가능하여 긴 시퀀스에서도 효율적인 학습
+                    - 복잡한 시간적 패턴 및 비선형 관계 학습에 강점
+                    - 다양한 시간 규모의 패턴을 동시에 학습 가능
+                    """)
                 
                 # 모델 성능 메트릭 설명
                 st.markdown("### 성능 지표 해석")

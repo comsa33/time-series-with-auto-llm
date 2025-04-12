@@ -419,6 +419,14 @@ def train_models(selected_models, complexity):
             'weekly_seasonality': True,
             'changepoint_prior_scale': 0.01
         }
+        transformer_params = {
+            'window_size': min(24, safe_len(st.session_state.train, 100) // 20),
+            'embed_dim': 32,
+            'num_heads': 2,
+            'ff_dim': 64,
+            'num_layers': 1,
+            'epochs': 30
+        }
     elif complexity == '중간':
         arima_params = {
             'max_p': 2, 'max_q': 2, 'max_P': 1, 'max_Q': 1,
@@ -433,6 +441,14 @@ def train_models(selected_models, complexity):
             'daily_seasonality': True,
             'weekly_seasonality': True,
             'changepoint_prior_scale': 0.05
+        }
+        transformer_params = {
+            'window_size': min(48, safe_len(st.session_state.train, 100) // 10),
+            'embed_dim': 64,
+            'num_heads': 4,
+            'ff_dim': 128,
+            'num_layers': 2,
+            'epochs': 50
         }
     else:  # 복잡 (정확도 높음, 고메모리)
         arima_params = {
@@ -449,6 +465,14 @@ def train_models(selected_models, complexity):
             'weekly_seasonality': True,
             'yearly_seasonality': True,
             'changepoint_prior_scale': 0.05
+        }
+        transformer_params = {
+            'window_size': min(72, safe_len(st.session_state.train, 100) // 8),
+            'embed_dim': 128,
+            'num_heads': 8,
+            'ff_dim': 256,
+            'num_layers': 3,
+            'epochs': 100
         }
     
     # 데이터 준비 및 키 생성 (캐싱용)
@@ -656,35 +680,6 @@ def train_models(selected_models, complexity):
                         forecast = None
                         model_metrics = None
                     
-            elif model_type == 'exp_smoothing':
-                # 파라미터 저장
-                st.session_state.model_params[model_type] = {
-                    'model_type': 'hw',
-                    'trend': 'add',
-                    'seasonal': 'add',
-                    'seasonal_periods': st.session_state.period,
-                    'damped_trend': False
-                }
-                
-                # 차분 데이터 사용 여부에 따라 다른 함수 호출
-                if st.session_state.use_differencing:
-                    forecast, model_metrics = cached_train_exp_smoothing_differenced(
-                        train_data_key, 
-                        test_data_key,
-                        seasonal_periods=st.session_state.period
-                    )
-                    
-                    # 역변환 적용
-                    if forecast is not None:
-                        from backend.data_service import inverse_transform_forecast
-                        forecast = inverse_transform_forecast(forecast)
-                else:
-                    forecast, model_metrics = cached_train_exp_smoothing(
-                        train_data_key, 
-                        test_data_key,
-                        seasonal_periods=st.session_state.period
-                    )
-                    
             elif model_type == 'prophet':
                 # 파라미터 저장
                 st.session_state.model_params[model_type] = {
@@ -727,6 +722,31 @@ def train_models(selected_models, complexity):
                     )
                 else:
                     st.error(f"LSTM 모델 학습을 위한 데이터가 없습니다.")
+                    forecast = None
+                    model_metrics = None
+                    
+            elif model_type == 'transformer':
+                # 파라미터 저장
+                st.session_state.model_params[model_type] = {
+                    'window_size': transformer_params.get('window_size', 24),
+                    'embed_dim': transformer_params.get('embed_dim', 64),
+                    'num_heads': transformer_params.get('num_heads', 4),
+                    'ff_dim': transformer_params.get('ff_dim', 128),
+                    'num_layers': transformer_params.get('num_layers', 2),
+                    'epochs': transformer_params.get('epochs', 50)
+                }
+                
+                # 트랜스포머는 항상 원본 데이터로 학습 (차분 데이터 무시)
+                if st.session_state.train is not None and st.session_state.test is not None:
+                    train_key = hash(tuple(st.session_state.train.values.tolist()))
+                    test_key = hash(tuple(st.session_state.test.values.tolist()))
+                    forecast, model_metrics = cached_train_transformer(
+                        train_key, 
+                        test_key,
+                        **transformer_params
+                    )
+                else:
+                    st.error(f"트랜스포머 모델 학습을 위한 데이터가 없습니다.")
                     forecast = None
                     model_metrics = None
             
@@ -973,3 +993,99 @@ def train_models_with_params(selected_models: List[str], tuned_params: Dict[str,
     else:
         st.error("조정된 파라미터로 모델 학습 중 오류가 발생했습니다.")
         return False
+
+# LSTM 모델용 캐싱 함수
+@st.cache_data(ttl=3600)
+def cached_train_lstm(train_data_key, test_data_key, **kwargs):
+    """
+    LSTM 모델 학습 결과를 캐싱합니다.
+    
+    Args:
+        train_data_key: 훈련 데이터 해시
+        test_data_key: 테스트 데이터 해시
+        **kwargs: 추가 파라미터
+        
+    Returns:
+        tuple: (예측값, 성능 지표)
+    """
+    try:
+        model_factory = get_model_factory()
+        if model_factory is None:
+            return None, None
+        
+        # 데이터 확인
+        train_data = None
+        test_data = None
+        
+        if hasattr(st.session_state, 'train') and st.session_state.train is not None:
+            train_data = st.session_state.train
+        elif hasattr(st.session_state, 'diff_train') and st.session_state.diff_train is not None:
+            train_data = st.session_state.diff_train
+            
+        if hasattr(st.session_state, 'test') and st.session_state.test is not None:
+            test_data = st.session_state.test
+        elif hasattr(st.session_state, 'diff_test') and st.session_state.diff_test is not None:
+            test_data = st.session_state.diff_test
+            
+        if train_data is None or test_data is None:
+            st.error("LSTM 모델을 위한 데이터가 없습니다.")
+            return None, None
+        
+        model = model_factory.get_model('lstm')
+        forecast, metrics = model.fit_predict_evaluate(
+            train_data, 
+            test_data,
+            **kwargs  # 모든 lstm_params가 여기로 전달됨
+        )
+        return forecast, metrics
+    except Exception as e:
+        st.error(f"LSTM 모델 학습 오류: {e}")
+        return None, None
+
+# 트랜스포머 모델용 캐싱 함수
+@st.cache_data(ttl=3600)
+def cached_train_transformer(train_data_key, test_data_key, **kwargs):
+    """
+    트랜스포머 모델 학습 결과를 캐싱합니다.
+    
+    Args:
+        train_data_key: 훈련 데이터 해시
+        test_data_key: 테스트 데이터 해시
+        **kwargs: 추가 파라미터
+        
+    Returns:
+        tuple: (예측값, 성능 지표)
+    """
+    try:
+        model_factory = get_model_factory()
+        if model_factory is None:
+            return None, None
+        
+        # 데이터 확인
+        train_data = None
+        test_data = None
+        
+        if hasattr(st.session_state, 'train') and st.session_state.train is not None:
+            train_data = st.session_state.train
+        elif hasattr(st.session_state, 'diff_train') and st.session_state.diff_train is not None:
+            train_data = st.session_state.diff_train
+            
+        if hasattr(st.session_state, 'test') and st.session_state.test is not None:
+            test_data = st.session_state.test
+        elif hasattr(st.session_state, 'diff_test') and st.session_state.diff_test is not None:
+            test_data = st.session_state.diff_test
+            
+        if train_data is None or test_data is None:
+            st.error("트랜스포머 모델을 위한 데이터가 없습니다.")
+            return None, None
+        
+        model = model_factory.get_model('transformer')
+        forecast, metrics = model.fit_predict_evaluate(
+            train_data, 
+            test_data,
+            **kwargs  # 모든 transformer_params가 여기로 전달됨
+        )
+        return forecast, metrics
+    except Exception as e:
+        st.error(f"트랜스포머 모델 학습 오류: {e}")
+        return None, None

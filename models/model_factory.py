@@ -49,6 +49,18 @@ def get_lstm_model():
         warnings.warn(f"LSTM 모델을 가져올 수 없습니다: {e}")
         return None
 
+def get_transformer_model():
+    try:
+        from models.transformer_model import TransformerModel, TF_AVAILABLE
+        if TF_AVAILABLE:
+            return TransformerModel
+        else:
+            warnings.warn("TensorFlow 라이브러리가 설치되지 않았습니다.")
+            return None
+    except ImportError as e:
+        warnings.warn(f"트랜스포머 모델을 가져올 수 없습니다: {e}")
+        return None
+
 
 class ModelFactory(metaclass=Singleton):
     """
@@ -81,6 +93,11 @@ class ModelFactory(metaclass=Singleton):
         lstm_model = get_lstm_model()
         if lstm_model:
             self.available_models['lstm'] = lstm_model
+            
+        # 트랜스포머 모델 추가
+        transformer_model = get_transformer_model()
+        if transformer_model:
+            self.available_models['transformer'] = transformer_model
     
     def get_model(self, model_type: str, **kwargs) -> TimeSeriesModel:
         """

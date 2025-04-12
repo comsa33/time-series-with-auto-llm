@@ -8,7 +8,7 @@
 - **시계열 분해**: 추세(Trend), 계절성(Seasonality), 불규칙성(Irregularity) 분석
 - **정상성 검정**: ADF 검정을 통한 시계열 데이터 정상성 분석
 - **ACF/PACF 분석**: 자기상관함수 및 부분 자기상관함수 분석
-- **모델 비교**: ARIMA/SARIMA, 지수평활법, Prophet, LSTM 등 다양한 예측 모델 지원
+- **모델 비교**: ARIMA/SARIMA, 지수평활법, Prophet, LSTM, Transformer 등 다양한 예측 모델 지원
 - **예측 성능 평가**: RMSE, MAE, R² 등 다양한 메트릭 기반 평가
 - **LLM 분석**: 인공지능을 활용한 시계열 데이터 및 예측 결과 자동 분석
 
@@ -121,6 +121,7 @@ helm install time-series-app .
   - 지수평활법 (statsmodels)
   - Prophet (Facebook)
   - LSTM (TensorFlow)
+  - Transformer (TensorFlow)
 - **데이터 처리**: pandas, numpy
 - **시각화**: plotly, matplotlib, seaborn
 - **LLM 분석**: OpenAI API (Ollama 연동)
