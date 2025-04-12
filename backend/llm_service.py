@@ -133,11 +133,20 @@ def run_llm_analysis():
                     "metrics": {}
                 }
                 for metric_name, metric_value in metrics.items():
+                    # 'name'과 같은 문자열 필드는 건너뛰기
+                    if metric_name in ['name', 'model_type']:
+                        continue
+                        
                     # NaN 값 처리
                     if pd.isna(metric_value):
                         model_results["models"][model_name]["metrics"][metric_name] = None
                     else:
-                        model_results["models"][model_name]["metrics"][metric_name] = float(metric_value)
+                        try:
+                            # 숫자 값만 float으로 변환
+                            model_results["models"][model_name]["metrics"][metric_name] = float(metric_value)
+                        except (ValueError, TypeError):
+                            # 숫자로 변환할 수 없는 값은 그대로 유지
+                            model_results["models"][model_name]["metrics"][metric_name] = metric_value
                 
                 # 예측값이 있는 경우만 통계 추가
                 # 모델명 매핑을 위한 사전 정의
