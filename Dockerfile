@@ -1,6 +1,10 @@
 # CUDA 베이스 이미지
 FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 
+# 비대화형 모드 설정
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Seoul
+
 # 필요한 기본 패키지 설치
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
