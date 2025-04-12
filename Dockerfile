@@ -1,5 +1,5 @@
 # CUDA 베이스 이미지
-FROM nvidia/cuda:12.3.1-runtime-ubuntu22.04
+FROM nvidia/cuda:12.2.2-cudnn8-runtime-ubuntu22.04
 
 # 비대화형 모드 설정
 ENV DEBIAN_FRONTEND=noninteractive
@@ -12,8 +12,6 @@ ENV TF_FORCE_GPU_ALLOW_GROWTH=true
 # 필요한 기본 패키지 설치
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    libcudnn8 \
-    libcudnn8-dev \
     libssl-dev \
     zlib1g-dev \
     libbz2-dev \
