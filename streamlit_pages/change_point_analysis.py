@@ -26,15 +26,15 @@ col1, col2 = st.columns(2)
 with col1:
     detection_method = st.selectbox(
         "탐지 방법",
-        options=['l1', 'l2', 'rbf', 'linear', 'normal', 'ar'],
+        options=['l1', 'l2', 'rbf', 'normal', 'ar'],
         index=0,
-        help="변화점 탐지 알고리즘의 비용 함수"
+        help="변화점 탐지 알고리즘의 비용 함수 ('l2'가 가장 안정적)"
     )
 
 with col2:
     min_segment_size = st.slider(
         "최소 세그먼트 크기",
-        min_value=10,
+        min_value=5,
         max_value=100,
         value=30,
         help="변화점 사이의 최소 데이터 포인트 수"

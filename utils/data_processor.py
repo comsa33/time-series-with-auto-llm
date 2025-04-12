@@ -468,7 +468,6 @@ class DataProcessor(metaclass=Singleton):
             'bic': model_fit.bic
         }
 
-    # utils/data_processor.py에 추가
     def detect_change_points(self, series: pd.Series, method: str = 'l2', min_size: int = 30) -> dict:
         """
         시계열 데이터의 구조적 변화점을 탐지합니다.
