@@ -16,7 +16,7 @@ def render_footer():
     year = datetime.datetime.now().year
     author = "이루오(Ruo Lee)"
     e_mail = "comsa333@gmail.com"
-    github = "comsa33"
+    github = "comsa33/time-series-with-auto-llm"
     data_source = "서울시 실시간 도시데이터"
     st.sidebar.markdown(
         f"""
