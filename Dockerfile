@@ -1,30 +1,27 @@
-# Python 3.10.16 기반 이미지 사용
+# CUDA 베이스 이미지
 FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 
-# Python 3.10.16 설치 (deadsnakes PPA 사용)
-RUN apt-get update && apt-get install -y software-properties-common && \
-    add-apt-repository ppa:deadsnakes/ppa && \
-    apt-get update && \
-    apt-get install -y python3.10=3.10.16* python3.10-distutils python3.10-dev python3-pip && \
-    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1 && \
-    update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1
-
-# pip 업그레이드
-RUN python -m pip install --upgrade pip
-
-# 작업 디렉토리 설정
-WORKDIR /app
-
-# 환경변수 설정
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app 
-
-# 시스템 패키지 설치 (한글 폰트 및 CUDA 라이브러리 포함)
+# 필요한 기본 패키지 설치
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    libpq-dev \
+    libssl-dev \
+    zlib1g-dev \
+    libbz2-dev \
+    libreadline-dev \
+    libsqlite3-dev \
+    wget \
+    curl \
+    llvm \
+    libncurses5-dev \
+    xz-utils \
+    tk-dev \
+    libxml2-dev \
+    libxmlsec1-dev \
+    libffi-dev \
+    liblzma-dev \
     git \
+    ca-certificates \
+    libpq-dev \
     fonts-nanum \
     fonts-noto-cjk \
     locales \
@@ -50,28 +47,58 @@ ENV LC_ALL=ko_KR.UTF-8
 # 폰트 캐시 갱신
 RUN fc-cache -fv
 
+# pyenv 설치 (비루트 사용자로 설치하는 것이 권장되지만, 간단하게 루트로 진행)
+ENV PYENV_ROOT=/root/.pyenv
+ENV PATH=$PYENV_ROOT/bin:$PATH
+RUN curl https://pyenv.run | bash
+
+# Python 3.10.16 설치 (정확한 버전)
+RUN eval "$(pyenv init -)" && \
+    pyenv install 3.10.16 && \
+    pyenv global 3.10.16 && \
+    pip install --upgrade pip
+
+# pyenv 설정을 글로벌 쉘에 추가
+RUN echo 'export PYENV_ROOT="/root/.pyenv"' >> /root/.bashrc && \
+    echo 'export PATH="$PYENV_ROOT/bin:$PATH"' >> /root/.bashrc && \
+    echo 'eval "$(pyenv init -)"' >> /root/.bashrc && \
+    echo 'eval "$(pyenv init --path)"' >> /root/.bashrc
+
+# 작업 디렉토리 설정
+WORKDIR /app
+
+# 환경변수 설정
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+
 # Poetry 설치
-RUN pip install poetry==2.1.1
+RUN eval "$(pyenv init -)" && \
+    pip install poetry==2.1.1
 
 # Poetry 가상환경 생성하지 않도록 설정
-RUN poetry config virtualenvs.create false
+RUN eval "$(pyenv init -)" && \
+    poetry config virtualenvs.create false
 
 # 프로젝트 파일 복사
 COPY pyproject.toml ./
 COPY poetry.lock* ./
 
 # 종속성 설치
-RUN poetry install --no-interaction --no-ansi --no-root
+RUN eval "$(pyenv init -)" && \
+    poetry install --no-interaction --no-ansi --no-root
 
 # data 디렉토리 생성
 RUN mkdir -p /app/data
 
-# app.py 수정 (GPU 활성화)
+# 소스코드 복사
 COPY . .
+
+# app.py 수정 (GPU 활성화)
 RUN sed -i 's/os.environ\["CUDA_VISIBLE_DEVICES"\] = "-1"/os.environ\["CUDA_VISIBLE_DEVICES"\] = "0"/g' app.py
 
 # 포트 설정
 EXPOSE 8777
 
-# 실행 명령어
-CMD ["streamlit", "run", "app.py", "--server.port", "8777", "--server.address", "0.0.0.0", "--server.fileWatcherType=none"]
+# 실행 명령어 설정 (pyenv 환경 활성화 포함)
+CMD ["bash", "-c", "eval \"$(pyenv init -)\" && streamlit run app.py --server.port 8777 --server.address 0.0.0.0 --server.fileWatcherType=none"]
