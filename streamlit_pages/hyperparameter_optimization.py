@@ -123,7 +123,7 @@ if 'hyperparameter_recommendations' in st.session_state and selected_model in st
     if st.button("조정된 파라미터로 모델 학습", type="primary"):
         with st.spinner("조정된 파라미터로 모델 학습 중..."):
             # 접두사 추가하여 기존 모델과 구분
-            success = train_models_with_params([selected_model], tuned_params, prefix="튜닝된_")
+            success = train_models_with_params([selected_model], tuned_params, prefix="llm_tuned_")
             if success:
                 st.success("모델 학습이 완료되었습니다!")
                 
