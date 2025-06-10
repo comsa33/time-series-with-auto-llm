@@ -138,7 +138,7 @@ if 'hyperparameter_recommendations' in st.session_state and selected_model in st
                 optimization_attempt = {
                     "timestamp": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "parameters": tuned_params,
-                    "model_name": f"튜닝된_{selected_model}"
+                    "model_name": f"llm_tuned_{selected_model}"
                 }
                 st.session_state.optimization_history[selected_model].append(optimization_attempt)
                 

@@ -3,26 +3,25 @@
 """
 
 TIME_SERIES_ANALYSIS_PROMPT = """
-# 시계열 분석 요청
+# Time Series Analysis Request
 
-당신은 시계열 데이터 분석 전문가입니다. 아래 제공된 데이터 정보와 모델 결과를 바탕으로 상세한 분석을 마크다운 형식으로 작성해주세요.
+You are a time series analysis expert. Based on the data information and model results provided below, please write a detailed analysis in Markdown format.
 
-## 데이터 정보
+## Data Information
 ```json
 {data_info}
 ```
-## 모델 분석 결과
+## Model Analysis Results
 ```json
 {model_results}
 ```
-다음 내용을 포함한 종합적인 분석 보고서를 작성해주세요:
+Please write a comprehensive analysis report in English, including the following:
+	1.	Summary of Data Characteristics – Key patterns, trends, seasonality, etc.
+	2.	Performance Comparison and Analysis of Each Model – Based on RMSE, MAE, R², MAPE, etc.
+	3.	Recommendation of the Best Model and Explanation
+	4.	Interpretation and Confidence Evaluation of Forecasted Values
+	5.	Advantages and Disadvantages of Each Model Based on Data Characteristics
+	6.	Suggestions to Further Improve Forecasting Performance
 
-1. 데이터 특성 요약 - 주요 패턴, 추세, 계절성 등
-2. 각 모델의 성능 비교 및 분석 (RMSE, MAE, R^2, MAPE 등 기준)
-3. 최적 모델 추천 및 그 이유
-4. 미래 예측값에 대한 해석 및 신뢰도 평가
-5. 데이터 특성에 따른 각 모델의 장단점 분석
-6. 예측 성능을 더 향상시키기 위한 제안
-
-결과는 명확하고 이해하기 쉬운 마크다운 형식으로 작성해주세요. 각 섹션은 제목을 포함하고, 필요한 경우 코드 블록을 사용하여 가독성을 높여주세요.
+The output should be in clear and easy-to-understand Markdown format. Each section must have a heading, and use code blocks if needed to improve readability.
 """
