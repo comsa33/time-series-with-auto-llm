@@ -70,19 +70,24 @@ class TimeSeriesModel(ABC):
         """
         # 길이 맞춤
         min_len = min(len(actual), len(predicted))
-        actual = actual.iloc[:min_len].reset_index(drop=True)
+        actual = actual.iloc[:min_len]
         predicted = predicted[:min_len]
         
+        # numpy array로 변환 (인덱스 문제 방지)
+        actual_values = actual.values
+        predicted_values = np.array(predicted)
+        
         # 성능 지표 계산
-        mse = mean_squared_error(actual, predicted)
+        mse = mean_squared_error(actual_values, predicted_values)
         rmse = np.sqrt(mse)
-        mae = mean_absolute_error(actual, predicted)
-        r2 = r2_score(actual, predicted)
+        mae = mean_absolute_error(actual_values, predicted_values)
+        r2 = r2_score(actual_values, predicted_values)
         
         # MAPE 계산 (실제값이 0이 아닌 경우만)
-        mask = actual != 0
+        mask = actual_values != 0
+        
         if mask.any():
-            mape = np.mean(np.abs((actual[mask] - predicted[mask]) / actual[mask])) * 100
+            mape = np.mean(np.abs((actual_values[mask] - predicted_values[mask]) / actual_values[mask])) * 100
         else:
             mape = np.nan
         
