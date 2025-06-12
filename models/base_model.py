@@ -70,7 +70,7 @@ class TimeSeriesModel(ABC):
         """
         # 길이 맞춤
         min_len = min(len(actual), len(predicted))
-        actual = actual.iloc[:min_len]
+        actual = actual.iloc[:min_len].reset_index(drop=True)
         predicted = predicted[:min_len]
         
         # 성능 지표 계산
