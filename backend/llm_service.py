@@ -6,6 +6,7 @@ from typing import Dict, Any
 import streamlit as st
 import pandas as pd
 import numpy as np
+from scipy import stats
 
 from config.settings import app_config
 from prompts.hyperparameter_recommendation_prompt import HYPERPARAMETER_RECOMMENDATION_PROMPT
@@ -335,10 +336,13 @@ def _collect_data_info() -> Dict[str, Any]:
             "end": str(st.session_state.series.index.max())
         }
         data_info["statistics"] = {
-            "min": float(st.session_state.series.min()),
+             "min": float(st.session_state.series.min()),
             "max": float(st.session_state.series.max()),
             "mean": float(st.session_state.series.mean()),
-            "std": float(st.session_state.series.std())
+            "median": float(st.session_state.series.median()),  # 추가
+            "std": float(st.session_state.series.std()),
+            "skewness": float(st.session_state.series.skew()),  # 추가
+            "kurtosis": float(st.session_state.series.kurtosis())  # 추가
         }
     
     # 훈련/테스트 분할 정보
@@ -433,7 +437,10 @@ def _collect_performance_metrics(model_type: str) -> Dict[str, Any]:
                         "min": float(np.min(forecast)),
                         "max": float(np.max(forecast)),
                         "mean": float(np.mean(forecast)),
-                        "std": float(np.std(forecast))
+                        "median": float(np.median(forecast)),  # 추가
+                        "std": float(np.std(forecast)),
+                        "skewness": float(stats.skew(forecast)),  # 추가
+                        "kurtosis": float(stats.kurtosis(forecast))  # 추가
                     }
             break
     

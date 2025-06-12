@@ -44,7 +44,26 @@ else:
     
     # 시계열 기본 통계
     st.markdown("### 기본 통계량")
+
+    # 기본 통계량 계산
     stats_df = st.session_state.series.describe().to_frame().T
+
+    # 추가 통계량 계산 (median, skewness, kurtosis)
+    additional_stats = {
+        'median': st.session_state.series.median(),
+        'skewness': st.session_state.series.skew(),
+        'kurtosis': st.session_state.series.kurtosis()
+    }
+
+    # 추가 통계량을 DataFrame에 추가
+    for stat_name, stat_value in additional_stats.items():
+        stats_df[stat_name] = stat_value
+
+    # 컬럼 순서 재정렬 (보기 좋게)
+    desired_order = ['count', 'mean', 'median', 'std', 'min', '25%', '50%', '75%', 'max', 'skewness', 'kurtosis']
+    available_columns = [col for col in desired_order if col in stats_df.columns]
+    stats_df = stats_df[available_columns]
+
     st.dataframe(stats_df, use_container_width=True)
     
     # 시계열 그래프 표시

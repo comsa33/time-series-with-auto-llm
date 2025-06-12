@@ -305,3 +305,43 @@ def render_station_info(df):
                         help="측정소당 평균 데이터 수",
                         border=True
                     )
+
+
+def get_comprehensive_statistics(data):
+    """포괄적인 통계 지표 계산"""
+    import scipy.stats as stats
+    
+    statistics = {
+        "count": len(data),
+        "mean": float(data.mean()),
+        "median": float(data.median()),
+        "min": float(data.min()),
+        "max": float(data.max()),
+        "std": float(data.std()),
+        "skewness": float(stats.skew(data)),
+        "kurtosis": float(stats.kurtosis(data))
+    }
+    return statistics
+
+
+def render_extended_statistics(df, target_column):
+    """확장된 통계 정보 표시"""
+    
+    # 통계 계산
+    stats = get_comprehensive_statistics(df[target_column])
+    
+    # 8개 컬럼으로 배치 (기존 4개 + 추가 4개)
+    col1, col2, col3, col4 = st.columns(4)
+    col5, col6, col7, col8 = st.columns(4)
+    
+    # 기존 지표들
+    col1.metric("평균", f"{stats['mean']:.3f}")
+    col2.metric("중앙값", f"{stats['median']:.3f}")
+    col3.metric("최솟값", f"{stats['min']:.3f}")
+    col4.metric("최댓값", f"{stats['max']:.3f}")
+    
+    # 새로운 지표들
+    col5.metric("표준편차", f"{stats['std']:.3f}")
+    col6.metric("왜도", f"{stats['skewness']:.3f}")
+    col7.metric("첨도", f"{stats['kurtosis']:.3f}")
+    col8.metric("데이터 수", f"{stats['count']:,}")
